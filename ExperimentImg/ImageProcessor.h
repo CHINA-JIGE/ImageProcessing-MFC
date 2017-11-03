@@ -24,6 +24,15 @@ struct ThreadParam
 	int maxSpan;//为模板中心到边缘的距离
 };
 
+struct ThreadParam_Rotation
+{
+	CImage * pSrc;
+	CImage* pDest;
+	int startIndex;
+	int endIndex;
+	float radianAngle;
+};
+
 static bool GetValue(int p[], int size, int &value);
 
 class ImageProcessor
@@ -62,8 +71,8 @@ private:
 	static COLOR3	mFunction_GetPixel(CImage* pImage, int x, int y);
 
 	static UINT mFunction_MedianFilterForTargetRegion(LPVOID  pThreadParam);//单个线程执行的功能
-	static UINT mFunction_AddNoiseForTargetRegion(LPVOID param);
-
+	static UINT mFunction_AddNoiseForTargetRegion(LPVOID pThreadParam);
+	static UINT mFunction_RotateForTargetRegion(LPVOID pThreadParam);
 
 
 };

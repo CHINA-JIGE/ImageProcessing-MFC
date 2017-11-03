@@ -166,13 +166,41 @@ UINT ImageProcessor::AddNoise_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numT
 
 UINT ImageProcessor::Rotate_WIN(CImage * pImgSrc, CImage * pImgDest, int numThreads, float radianAngle)
 {
+	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
+	ThreadParam_Rotation* pParamArray = new ThreadParam_Rotation[cMaxThreadNum];
+	for (int i = 0; i < numThreads; ++i)
+	{
+		pParamArray[i].startIndex = i * subLength;
+		pParamArray[i].endIndex = i != numThreads - 1 ?
+			(i + 1) * subLength - 1 : pImgSrc->GetWidth() * pImgSrc->GetHeight() - 1;
+		pParamArray[i].pSrc = pImgSrc;
+		pParamArray[i].pDest = pImgDest;
+		pParamArray[i].radianAngle = radianAngle;
 
-
+		//new thread
+		AfxBeginThread((AFX_THREADPROC)&ImageProcessor::mFunction_RotateForTargetRegion, &pParamArray[i]);
+	}
 	return 0;
 }
 
 UINT ImageProcessor::Rotate_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numThreads, float radianAngle)
 {
+	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
+	ThreadParam_Rotation* pParamArray = new ThreadParam_Rotation[cMaxThreadNum];
+	//OpenMP 并不是一个简单的函数库，而是被众多【编译器】所支持的并行计算
+	//框架/协议，只需要在一个for前面加上#pragma omp parallel xxxxx 就可以
+	//很舒服地把并行化的工作扔给编译器做，简直6666666666666！！！
+#pragma omp parallel for num_threads(mThreadNum)
+	for (int i = 0; i < numThreads; ++i)
+	{
+		pParamArray[i].startIndex = i * subLength;
+		pParamArray[i].endIndex = i != numThreads - 1 ?
+			(i + 1) * subLength - 1 : pImgSrc->GetWidth() * pImgSrc->GetHeight() - 1;
+		pParamArray[i].pSrc = pImgSrc;
+		pParamArray[i].pDest = pImgDest;
+		pParamArray[i].radianAngle = radianAngle;
+		ImageProcessor::mFunction_RotateForTargetRegion(&pParamArray[i]);
+	}
 	return 0;
 }
 
@@ -190,16 +218,6 @@ inline void ImageProcessor::mFunction_SetPixel(CImage* pImage, int x, int y, COL
 	int pitch = pImage->GetPitch();
 	byte* pData = (byte*)pImage->GetBits();
 
-	//编译期的模版函数优化
-	/*if (bytesPerPixel == 1)
-	{
-		//灰度
-		*(pImage + pitch * y + x * bytesPerPixel) = c.r;
-		*(pImage + pitch * y + x * bytesPerPixel + 1) = c.r;
-		*(pImage + pitch * y + x * bytesPerPixel + 2) = c.r;
-	}
-	else*/
-
 	*(pData + pitch * y + x * bytesPerPixel+ 2) = c.r;
 	*(pData + pitch * y + x * bytesPerPixel+ 1) = c.g;
 	*(pData + pitch * y + x * bytesPerPixel+ 0) = c.b;
@@ -214,14 +232,6 @@ inline COLOR3 ImageProcessor::mFunction_GetPixel(CImage * pImage, int x, int y)
 	int pitch = pImage->GetPitch();
 	byte* pData = (byte*)pImage->GetBits();
 
-	//编译期的模版函数优化
-	/*if (bytesPerPixel == 1)
-	{
-		byte r = *(pSrcRealData + pitch*y+x*bytesPerPixel + 2);
-		return COLOR3(r, r, r);
-	}
-	else*/
-
 	byte r = *(pData + pitch*y + x*bytesPerPixel + 2);
 	byte g = *(pData + pitch*y + x*bytesPerPixel + 1);
 	byte b = *(pData + pitch*y + x*bytesPerPixel + 0);
@@ -229,9 +239,9 @@ inline COLOR3 ImageProcessor::mFunction_GetPixel(CImage * pImage, int x, int y)
 }
 
 
-UINT ImageProcessor::mFunction_MedianFilterForTargetRegion(LPVOID  p)
+UINT ImageProcessor::mFunction_MedianFilterForTargetRegion(LPVOID  pThreadParam)
 {
-	ThreadParam* param = (ThreadParam*)p;
+	ThreadParam* param = (ThreadParam*)pThreadParam;
 
 	int maxWidth = param->pSrc->GetWidth();
 	int maxHeight = param->pSrc->GetHeight();
@@ -239,11 +249,6 @@ UINT ImageProcessor::mFunction_MedianFilterForTargetRegion(LPVOID  p)
 	int endIndex = param->endIndex;
 	int maxSpan = param->maxSpan;
 	int maxLength = (maxSpan * 2 + 1) * (maxSpan * 2 + 1);
-
-	byte* pSrcRealData = (byte*)param->pSrc->GetBits();
-	byte* pDestRealData = (byte*)param->pDest->GetBits();
-	int pitch = param->pSrc->GetPitch();//一行像素的byteCount，但是假定src和Dest的尺寸是一样的
-	int bytesPerPixel = param->pSrc->GetBPP() / 8;//一个像素的byteCount
 
 	int *pixel = new int[maxLength];//存储每个像素点的灰度
 	int *pixelR = new int[maxLength];
@@ -266,22 +271,13 @@ UINT ImageProcessor::mFunction_MedianFilterForTargetRegion(LPVOID  p)
 				for (int tmpX = x - Sxy; tmpX <= x + Sxy && tmpX<maxWidth; tmpX++)
 				{
 					if (tmpX < 0) continue;
-					if (bytesPerPixel == 1)
-					{
-						pixel[index] = *(pSrcRealData + pitch*(tmpY)+(tmpX)*bytesPerPixel);
-						pixelR[index++] = pixel[index];
 
-					}
-					else
-					{
-						pixelR[index] = *(pSrcRealData + pitch*(tmpY)+(tmpX)*bytesPerPixel + 2);
-						pixelG[index] = *(pSrcRealData + pitch*(tmpY)+(tmpX)*bytesPerPixel + 1);
-						pixelB[index] = *(pSrcRealData + pitch*(tmpY)+(tmpX)*bytesPerPixel);
-						pixel[index++] = int(pixelB[index] * 0.299 + 0.587*pixelG[index] + pixelR[index] * 0.144);
-
-					}
+					COLOR3 c = mFunction_GetPixel(param->pSrc, tmpX, tmpY);
+					pixelR[index] = c.r;
+					pixelG[index] = c.g;
+					pixelB[index] = c.b;
+					pixel[index++] = int(c.b * 0.299f + 0.587f*c.g + c.r * 0.144f);
 				}
-
 			}
 			if (index <= 0)
 				break;
@@ -293,17 +289,8 @@ UINT ImageProcessor::mFunction_MedianFilterForTargetRegion(LPVOID  p)
 
 		if (state)
 		{
-			if (bytesPerPixel == 1)
-			{
-				*(pDestRealData + pitch*y + x*bytesPerPixel) = pixelR[med];
-			}
-			else
-			{
-				*(pDestRealData + pitch*y + x*bytesPerPixel + 2) = pixelR[med];
-				*(pDestRealData + pitch*y + x*bytesPerPixel + 1) = pixelG[med];
-				*(pDestRealData + pitch*y + x*bytesPerPixel) = pixelB[med];
-
-			}
+			COLOR3 c(pixelR[med], pixelG[med], pixelB[med]);
+			mFunction_SetPixel(param->pDest, x, y, c);
 		}
 
 	}
@@ -317,19 +304,13 @@ UINT ImageProcessor::mFunction_MedianFilterForTargetRegion(LPVOID  p)
 	return 0;
 }
 
-UINT ImageProcessor::mFunction_AddNoiseForTargetRegion(LPVOID  p)
+UINT ImageProcessor::mFunction_AddNoiseForTargetRegion(LPVOID  pThreadParam)
 {
-	ThreadParam* param = (ThreadParam*)p;
+	ThreadParam* param = (ThreadParam*)pThreadParam;
 	int maxWidth = param->pSrc->GetWidth();
 	int maxHeight = param->pSrc->GetHeight();
-
 	int startIndex = param->startIndex;
 	int endIndex = param->endIndex;
-	byte* pSrcRealData = (byte*)param->pSrc->GetBits();
-	byte* pDestRealData = (byte*)param->pDest->GetBits();
-
-	int bytesPerPixel = param->pSrc->GetBPP() / 8;
-	int pitch = param->pSrc->GetPitch();
 
 	for (int i = startIndex; i <= endIndex; ++i)
 	{
@@ -349,28 +330,69 @@ UINT ImageProcessor::mFunction_AddNoiseForTargetRegion(LPVOID  p)
 				value = 255;
 			}
 
-			if (bytesPerPixel == 1)
-			{
-				//灰度图
-				*(pDestRealData + pitch * y + x * bytesPerPixel) = value;
-			}
-			else
-			{
-				//RGB
-				*(pDestRealData + pitch * y + x * bytesPerPixel) = value;
-				*(pDestRealData + pitch * y + x * bytesPerPixel + 1) = value;
-				*(pDestRealData + pitch * y + x * bytesPerPixel + 2) = value;
-			}
+			//RGB
+			mFunction_SetPixel(param->pDest, x, y, COLOR3(value, value, value));
 		}
 		else
 		{
 			//不然就当前像素不变成噪声，从原图copy像素过来
-			int offset = pitch * y + x * bytesPerPixel;
-			*(pDestRealData + offset+2) = *(pSrcRealData + offset+2);
-			*(pDestRealData + offset +1) = *(pSrcRealData + offset+1);
-			*(pDestRealData + offset +0 ) = *(pSrcRealData + offset+0);
+			COLOR3 c = mFunction_GetPixel(param->pSrc, x, y);
+			mFunction_SetPixel(param->pDest, x, y, c);
 		}
 	}
 	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_NOISE, 1, NULL);
+	return 0;
+}
+
+UINT ImageProcessor::mFunction_RotateForTargetRegion(LPVOID pThreadParam)
+{
+	ThreadParam_Rotation* param = (ThreadParam_Rotation*)pThreadParam;
+	int maxWidth = param->pSrc->GetWidth();
+	int maxHeight = param->pSrc->GetHeight();
+	float halfPixelWidth = float(maxWidth) / 2.0f;//用于坐标的归一化
+	float halfPixelHeight = float(maxHeight) / 2.0f;
+	int startIndex = param->startIndex;
+	int endIndex = param->endIndex;
+	float angle = param->radianAngle;//旋转角度
+
+	//整个过程就像在写pixel shader
+	for (int i = startIndex; i <= endIndex; ++i)
+	{
+		int x = i % maxWidth;
+		int y = i / maxWidth;
+
+		//normalized X Y are mapped to [-1,1], centered at the center of screen
+		float normalizedX = float(x - halfPixelWidth) / halfPixelWidth;
+		float normalizedY = float(halfPixelHeight - y) / halfPixelHeight;
+
+		/*
+		[cos	sin]	[x]
+		[-sin	cos]	[y]
+		*/
+
+		//缩放图片，此处的缩放系数和缩放效果成【反比】，自己好好想想
+		float scaleFactor = 0.6f;
+		float aspectRatio = 0.666f;
+		float rotatedNormX = (1.0f/scaleFactor)* (normalizedX  * cosf(angle) + normalizedY * sinf(angle));
+		float rotatedNormY = (1.0f / scaleFactor) * aspectRatio * (normalizedX * sinf(angle) - normalizedY * sinf(angle));
+		
+		COLOR3 sampleColor;
+		//如果当前像素旋转后没有出界（意味着可以采样）
+		if (rotatedNormX > -1.0f && rotatedNormX < 1.0f &&
+			rotatedNormY > -1.0f && rotatedNormY < 1.0f)
+		{
+			int rotatedPixelX = int((rotatedNormX + 1.0f)/2.0f * maxWidth);
+			int rotatedPixelY = int((1.0f -rotatedNormY)/2.0f  * maxHeight);
+			sampleColor = mFunction_GetPixel(param->pSrc, rotatedPixelX, rotatedPixelY);
+		}
+		else
+		{
+			//出界的给我变黑好吧
+			sampleColor = COLOR3(0, 0, 0);
+		}
+
+		mFunction_SetPixel(param->pDest, x, y, sampleColor);
+	}
+	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_BICUBIC_FILTER_ROTATION, 1, NULL);
 	return 0;
 }

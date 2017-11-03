@@ -24,7 +24,7 @@ void CExperimentImgDlg::DoDataExchange(CDataExchange* pDX)
 	CDialogEx::DoDataExchange(pDX);
 	//	DDX_Control(pDX, IDC_EDIT_INFO, mEditInfo);
 	DDX_Control(pDX, IDC_PICTURE, mPictureBox1);
-	DDX_Control(pDX, IDC_CHECK_100, m_CheckBox_Circulate);
+	//DDX_Control(pDX, IDC_CHECK_100, m_CheckBox_Circulate);
 	DDX_Control(pDX, IDC_BUTTON_OPEN2, mButton_OpenFile2);
 	DDX_Control(pDX, IDC_PICTURE2, mPictureBox2);
 	DDX_Control(pDX, IDC_PICTURE3, mPictureBox_Result);
@@ -86,11 +86,13 @@ BOOL CExperimentImgDlg::OnInitDialog()
 	// TODO: 在此添加额外的初始化代码
 //	mEditInfo.SetWindowTextW(CString("File Path"));
 	CComboBox * cmb_function = ((CComboBox*)GetDlgItem(IDC_COMBO_FUNCTION));
-	cmb_function->InsertString(0,_T("椒盐噪声"));
-	cmb_function->InsertString(1,_T("中值滤波"));
-	cmb_function->InsertString(2,_T("三线性滤波"));
-	cmb_function->InsertString(3,_T("自动色阶"));
-	cmb_function->InsertString(4,_T("自动白平衡"));
+	cmb_function->InsertString(0,_T("椒盐噪声(左)"));
+	cmb_function->InsertString(1,_T("中值滤波(左)"));
+	cmb_function->InsertString(2,_T("旋转与三阶采样(左)"));
+	cmb_function->InsertString(3,_T("自动色阶(左)"));
+	cmb_function->InsertString(4,_T("自动白平衡(左)"));
+	cmb_function->InsertString(5, _T("图像融合(左+右)"));
+	cmb_function->InsertString(6, _T("双边滤波(左)"));
 	cmb_function->SetCurSel(0);
 
 	CComboBox * cmb_thread = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
@@ -277,6 +279,21 @@ void CExperimentImgDlg::OnBnClickedButtonProcess()
 	case 1: //自适应中值滤波
 		mFunction_MedianFilter();
 		break;
+	case 2://旋转与缩放
+		mFunction_Rotate(0.789f);
+		break;
+	case 3://自动色阶
+		mFunction_AutoColorGradation();
+		break;
+	case 4://自动白平衡
+		mFunction_AutoWhiteBalance();
+		break;
+	case 5://图像融合
+		mFunction_ImageBlending();
+		break;
+	case 6://双边滤波
+		mFunction_BilateralFilter();
+		break;
 	default:
 		break;
 	}
@@ -454,6 +471,51 @@ void CExperimentImgDlg::mFunction_MedianFilter()
 		break;
 	}
 }
+
+
+void CExperimentImgDlg::mFunction_Rotate(float angle)
+{
+	//从comboBox里面获取要演示的功能
+	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
+	int parallelScheme = cmb_parallelScheme->GetCurSel();
+
+	mStartTime = CTime::GetTickCount();
+	switch (parallelScheme)
+	{
+	case 0://win多线程
+	{
+		ImageProcessor::Rotate_WIN(m_pImage1, m_pImageResult, mThreadNum,angle);
+		break;
+	}
+
+	case 1://openmp
+	{
+		ImageProcessor::Rotate_OpenMP(m_pImage1, m_pImageResult, mThreadNum,angle);
+		break;
+	}
+
+	case 2://boost
+		AfxMessageBox(_T("【旋转与三阶采样】算法未实现基于boost库的并行加速！"));
+		break;
+	}
+}
+
+void CExperimentImgDlg::mFunction_AutoColorGradation()
+{
+}
+
+void CExperimentImgDlg::mFunction_AutoWhiteBalance()
+{
+}
+
+void CExperimentImgDlg::mFunction_ImageBlending()
+{
+}
+
+void CExperimentImgDlg::mFunction_BilateralFilter()
+{
+}
+
 
 void CExperimentImgDlg::OnBnClickedButton1()
 {

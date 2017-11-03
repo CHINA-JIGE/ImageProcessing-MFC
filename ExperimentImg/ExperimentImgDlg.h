@@ -46,6 +46,16 @@ private:
 
 	void		mFunction_AddNoise();
 
+	void		mFunction_Rotate(float angle);
+
+	void		mFunction_AutoColorGradation();
+
+	void		mFunction_AutoWhiteBalance();
+
+	void		mFunction_ImageBlending();
+
+	void		mFunction_BilateralFilter();
+
 protected:
 	HICON			m_hIcon;
 	int				mThreadNum;//要使用的线程数
@@ -64,8 +74,8 @@ protected:
 public:
 
 	//默认的图像缓冲区(CImage)的大小
-	const int cPictureBufferWidth = 640;
-	const int cPictureBufferHeight = 480;
+	static const int cPictureBufferWidth = 640;
+	static const int cPictureBufferHeight = 480;
 
 	CEdit mEditInfo;
 	CButton mButton_OpenFile1;
@@ -80,6 +90,5 @@ public:
 	afx_msg void OnCbnSelchangeComboFunction();
 	afx_msg void OnNMCustomdrawSliderThreadnum(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnBnClickedButtonProcess();
-
 	afx_msg void OnBnClickedButton1();
 };
