@@ -36,7 +36,8 @@
 
 
 
-// 自定义的线程间通信消息
+// 自定义的线程间通信消息，用ON_MESSAGE绑定消息要发送到的回调函数
+//每个线程（的函数）执行完会PostMessage（详情看ImageProcessor的实现）
 #ifndef WM_MEDIAN_FILTER
 #define WM_MEDIAN_FILTER WM_USER+1
 #endif
@@ -46,8 +47,8 @@
 #endif
 
 //三线性插值
-#ifndef WM_TRILINEAR_INTERPOLATION
-#define WM_TRILINEAR_INTERPOLATION WM_USER+3
+#ifndef WM_BICUBIC_FILTER_ROTATION
+#define WM_BICUBIC_FILTER_ROTATION WM_USER+3
 #endif
 
 //自动色阶
@@ -60,7 +61,15 @@
 #define WM_AUTO_WHITE_BALANCE WM_USER+5
 #endif
 
+//图像融合
+#ifndef WM_IMAGE_BLENDING
+#define WM_IMAGE_BLENDING WM_USER+6
+#endif
 
+//双边滤波
+#ifndef WM_BILATERAL_FILTER
+#define WM_BILATERAL_FILTER WM_USER+7
+#endif
 
 #ifdef _UNICODE
 #if defined _M_IX86

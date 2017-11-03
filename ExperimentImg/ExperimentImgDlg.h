@@ -7,19 +7,6 @@
 #include "ImageProcessor.h"
 
 
-#define MAX_THREAD 8
-
-
-/*struct DrawPara
-{
-	CImage* pImgSrc;
-	CDC* pDC;
-	int oriX;
-	int oriY;
-	int width;
-	int height;
-};*/
-
 // CExperimentImgDlg 对话框
 class CExperimentImgDlg : public CDialogEx
 {
@@ -34,30 +21,38 @@ public:
 
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
-	CImage*		getImage() { return m_pImgSrc; }
+	CImage*	getImage() { return m_pImage1; }
 
-	void					MedianFilter();
 
-	void					AddNoise();
+	void	RenderToPictureBox(CStatic* pPicBox, CImage* pImage);
 
-	void					RenderToPictureBox(CStatic* pPicBox, CImage* pImage);
+	afx_msg LRESULT OnThreadMsgReceived_MedianFilter(WPARAM wParam, LPARAM lParam);
 
-	static UINT		Update(void* p);
+	afx_msg LRESULT OnThreadMsgReceived_AddNoise(WPARAM wParam, LPARAM lParam); 
 
-	//void ThreadDraw(DrawPara *p);
+	afx_msg LRESULT OnThreadMsgReceived_RotationWithBicubicFilter(WPARAM wParam, LPARAM lParam);
 
-	//void ImageCopy(CImage* pImgSrc, CImage* pImgDrt);
+	afx_msg LRESULT OnThreadMsgReceived_AutoColorGradation(WPARAM wParam, LPARAM lParam);
 
-	afx_msg LRESULT OnMedianFilterThreadMsgReceived(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnThreadMsgReceived_WhiteBalance(WPARAM wParam, LPARAM lParam);
 
-	afx_msg LRESULT OnNoiseThreadMsgReceived(WPARAM wParam, LPARAM lParam); 
+	afx_msg LRESULT OnThreadMsgReceived_ImageBlending(WPARAM wParam, LPARAM lParam);
+
+	afx_msg LRESULT OnThreadMsgReceived_BilateralFilter(WPARAM wParam, LPARAM lParam);
+
+private:
+
+	void		mFunction_MedianFilter();
+
+	void		mFunction_AddNoise();
 
 protected:
-	HICON m_hIcon;
-	CImage * m_pImgSrc;
-	int m_nThreadNum;
-	ThreadParam* m_pThreadParam;
-	CTime startTime;
+	HICON			m_hIcon;
+	int				mThreadNum;//要使用的线程数
+	CTime			mStartTime;
+	CImage *		m_pImage1;
+	CImage*		m_pImage2;
+	CImage*		m_pImageResult;
 
 	// 生成的消息映射函数
 	virtual BOOL OnInitDialog();
@@ -65,15 +60,26 @@ protected:
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
+
 public:
 
+	//默认的图像缓冲区(CImage)的大小
+	const int cPictureBufferWidth = 640;
+	const int cPictureBufferHeight = 480;
+
 	CEdit mEditInfo;
-	CStatic mPictureControl;
-	CButton m_CheckCirculation;
+	CButton mButton_OpenFile1;
+	CButton mButton_OpenFile2;
+	CButton m_CheckBox_Circulate;
+	CStatic mPictureBox1;
+	CStatic mPictureBox2;
+	CStatic mPictureBox_Result;
 
 	afx_msg void OnBnClickedButtonOpen();
+	afx_msg void OnBnClickedButtonOpen2();
 	afx_msg void OnCbnSelchangeComboFunction();
 	afx_msg void OnNMCustomdrawSliderThreadnum(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnBnClickedButtonProcess();
 
+	afx_msg void OnBnClickedButton1();
 };

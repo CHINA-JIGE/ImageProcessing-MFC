@@ -1,7 +1,4 @@
 
-// ExperimentImgDlg.cpp : 实现文件
-//
-
 #include "stdafx.h"
 #include "ExperimentImg.h"
 #include "ExperimentImgDlg.h"
@@ -11,54 +8,14 @@
 #define new DEBUG_NEW
 #endif
 
-
-// 用于应用程序“关于”菜单项的 CAboutDlg 对话框
-
-class CAboutDlg : public CDialogEx
-{
-public:
-	CAboutDlg();
-
-// 对话框数据
-#ifdef AFX_DESIGN_TIME
-	enum { IDD = IDD_ABOUTBOX };
-#endif
-
-	protected:
-	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
-
-// 实现
-protected:
-	DECLARE_MESSAGE_MAP()
-};
-
-CAboutDlg::CAboutDlg() : CDialogEx(IDD_ABOUTBOX)
-{
-}
-
-void CAboutDlg::DoDataExchange(CDataExchange* pDX)
-{
-	CDialogEx::DoDataExchange(pDX);
-}
-
-BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
-END_MESSAGE_MAP()
-
-
 // CExperimentImgDlg 对话框
-
-
-
 CExperimentImgDlg::CExperimentImgDlg(CWnd* pParent /*=NULL*/)
 	: CDialogEx(IDD_EXPERIMENTIMG_DIALOG, pParent)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 
 	//加载对话框的时候初始化
-	m_pImgSrc = NULL;
-//	m_pImgCpy = NULL;
-	m_nThreadNum = 1;
-	m_pThreadParam = new ThreadParam[MAX_THREAD];
+	mThreadNum = 1;
 	srand(time(0));
 }
 
@@ -66,8 +23,12 @@ void CExperimentImgDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
 	//	DDX_Control(pDX, IDC_EDIT_INFO, mEditInfo);
-	DDX_Control(pDX, IDC_PICTURE, mPictureControl);
-	DDX_Control(pDX, IDC_CHECK_100, m_CheckCirculation);
+	DDX_Control(pDX, IDC_PICTURE, mPictureBox1);
+	DDX_Control(pDX, IDC_CHECK_100, m_CheckBox_Circulate);
+	DDX_Control(pDX, IDC_BUTTON_OPEN2, mButton_OpenFile2);
+	DDX_Control(pDX, IDC_PICTURE2, mPictureBox2);
+	DDX_Control(pDX, IDC_PICTURE3, mPictureBox_Result);
+	DDX_Control(pDX, IDC_BUTTON_OPEN, mButton_OpenFile1);
 }
 
 BEGIN_MESSAGE_MAP(CExperimentImgDlg, CDialogEx)
@@ -75,13 +36,19 @@ BEGIN_MESSAGE_MAP(CExperimentImgDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BUTTON_OPEN, &CExperimentImgDlg::OnBnClickedButtonOpen)
-//	ON_EN_CHANGE(IDC_EDIT1, &CExperimentImgDlg::OnEnChangeEdit1)
-//	ON_EN_CHANGE(IDC_EDIT_INFO, &CExperimentImgDlg::OnEnChangeEditInfo)
-ON_CBN_SELCHANGE(IDC_COMBO_FUNCTION, &CExperimentImgDlg::OnCbnSelchangeComboFunction)
-ON_NOTIFY(NM_CUSTOMDRAW, IDC_SLIDER_THREADNUM, &CExperimentImgDlg::OnNMCustomdrawSliderThreadnum)
-ON_BN_CLICKED(IDC_BUTTON_PROCESS, &CExperimentImgDlg::OnBnClickedButtonProcess)
-ON_MESSAGE(WM_NOISE, &CExperimentImgDlg::OnNoiseThreadMsgReceived)
-ON_MESSAGE(WM_MEDIAN_FILTER, &CExperimentImgDlg::OnMedianFilterThreadMsgReceived)
+	ON_CBN_SELCHANGE(IDC_COMBO_FUNCTION, &CExperimentImgDlg::OnCbnSelchangeComboFunction)
+	ON_NOTIFY(NM_CUSTOMDRAW, IDC_SLIDER_THREADNUM, &CExperimentImgDlg::OnNMCustomdrawSliderThreadnum)
+	ON_BN_CLICKED(IDC_BUTTON_PROCESS, &CExperimentImgDlg::OnBnClickedButtonProcess)
+	ON_BN_CLICKED(IDC_BUTTON_OPEN2, &CExperimentImgDlg::OnBnClickedButtonOpen2)
+	//自定义的多线程结束通知的回调函数
+	ON_MESSAGE(WM_NOISE, &CExperimentImgDlg::OnThreadMsgReceived_AddNoise)
+	ON_MESSAGE(WM_MEDIAN_FILTER, &CExperimentImgDlg::OnThreadMsgReceived_MedianFilter)
+	ON_MESSAGE(WM_BICUBIC_FILTER_ROTATION,&CExperimentImgDlg::OnThreadMsgReceived_RotationWithBicubicFilter)
+	ON_MESSAGE(WM_AUTO_COLOR_GRADATION, &CExperimentImgDlg::OnThreadMsgReceived_AutoColorGradation)
+	ON_MESSAGE(WM_AUTO_WHITE_BALANCE, &CExperimentImgDlg::OnThreadMsgReceived_WhiteBalance)
+	ON_MESSAGE(WM_IMAGE_BLENDING, &CExperimentImgDlg::OnThreadMsgReceived_ImageBlending)
+	ON_MESSAGE(WM_BILATERAL_FILTER, &CExperimentImgDlg::OnThreadMsgReceived_BilateralFilter)
+	ON_BN_CLICKED(IDC_BUTTON1, &CExperimentImgDlg::OnBnClickedButton1)
 END_MESSAGE_MAP()
 
 
@@ -133,10 +100,19 @@ BOOL CExperimentImgDlg::OnInitDialog()
 	cmb_thread->SetCurSel(0);
 
 	CSliderCtrl * slider = ((CSliderCtrl*)GetDlgItem(IDC_SLIDER_THREADNUM));
-	slider->SetRange(1, MAX_THREAD, TRUE);
-	slider->SetPos(MAX_THREAD);
+	slider->SetRange(1, cMaxThreadNum, TRUE);
+	slider->SetPos(cMaxThreadNum);
 
-	AfxBeginThread((AFX_THREADPROC)&CExperimentImgDlg::Update, this);
+	//AfxBeginThread((AFX_THREADPROC)&CExperimentImgDlg::Update, this);
+
+	//初始化result picture box的缓冲区
+	m_pImageResult = new CImage();
+	m_pImageResult->Create(cPictureBufferWidth, cPictureBufferHeight, 24, 0);
+	m_pImage1 = new CImage();
+	m_pImage1->Create(cPictureBufferWidth, cPictureBufferHeight, 24, 0);
+	m_pImage2 = new CImage();
+	m_pImage2->Create(cPictureBufferWidth, cPictureBufferHeight, 24, 0);
+
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -144,8 +120,8 @@ void CExperimentImgDlg::OnSysCommand(UINT nID, LPARAM lParam)
 {
 	if ((nID & 0xFFF0) == IDM_ABOUTBOX)
 	{
-		CAboutDlg dlgAbout;
-		dlgAbout.DoModal();
+		//CAboutDlg dlgAbout;
+		//dlgAbout.DoModal();
 	}
 	else
 	{
@@ -180,8 +156,9 @@ void CExperimentImgDlg::OnPaint()
 	{
 		CDialogEx::OnPaint();
 
-		RenderToPictureBox(&mPictureControl, m_pImgSrc);
-
+		RenderToPictureBox(&mPictureBox1, m_pImage1);
+		RenderToPictureBox(&mPictureBox2, m_pImage2);
+		RenderToPictureBox(&mPictureBox_Result, m_pImageResult);
 	}
 }
 
@@ -197,124 +174,38 @@ void CExperimentImgDlg::RenderToPictureBox(CStatic * pPicBox, CImage * pImage)
 	//渲染CImage到Picturebox上
 	if (pImage != nullptr)
 	{
-		CRect rect;
-		CRect rect1;
+		CRect originalRect;
+		CRect scaledRect;
 		int height = pImage->GetHeight();
 		int width = pImage->GetWidth();
 
 		//get Context Device Chart 
-		pPicBox->GetClientRect(&rect);
+		pPicBox->GetClientRect(&originalRect);
 		CDC *pDC = pPicBox->GetDC();
 		SetStretchBltMode(pDC->m_hDC, STRETCH_HALFTONE);
 
 		//stretch pictures
-		if (width <= rect.Width() && height <= rect.Width())
+		if (width <= originalRect.Width() && height <= originalRect.Height())
 		{
-			rect1 = CRect(rect.TopLeft(), CSize(width, height));
-			pImage->StretchBlt(pDC->m_hDC, rect1, SRCCOPY);
+			scaledRect = CRect(originalRect.TopLeft(), CSize(width, height));
+			pImage->StretchBlt(pDC->m_hDC, scaledRect, SRCCOPY);
 		}
 		else
 		{
-			float xScale = (float)rect.Width() / (float)width;
-			float yScale = (float)rect.Height() / (float)height;
+			float xScale = (float)originalRect.Width() / (float)width;
+			float yScale = (float)originalRect.Height() / (float)height;
 			float ScaleIndex = (xScale <= yScale ? xScale : yScale);
-			rect1 = CRect(rect.TopLeft(), CSize((int)width*ScaleIndex, (int)height*ScaleIndex));
-			//将picture control调整到图像缩放后的大小
-			//				CWnd *pWnd;
-			//				pWnd = GetDlgItem(IDC_PICTURE);
-			//				pWnd->MoveWindow(CRect((int)rect.top, (int)rect.left, (int)width*ScaleIndex, (int)height*ScaleIndex));
-			pImage->StretchBlt(pDC->m_hDC, rect1, SRCCOPY);
+			int scaleWidth = width*ScaleIndex;
+			int scaleHeight = height*ScaleIndex;
+			scaledRect = CRect(originalRect.TopLeft(), CSize(scaleWidth,scaleHeight));
+			pImage->StretchBlt(pDC->m_hDC, scaledRect, SRCCOPY);
 		}
+
 		ReleaseDC(pDC);
 	}
 }
 
-UINT CExperimentImgDlg::Update(void* p)
-{
-	while (1)
-	{
-		Sleep(200);
-		CExperimentImgDlg* dlg = (CExperimentImgDlg*)p;
-		if (dlg->m_pImgSrc != NULL)
-		{
-			int height;
-			int width;
-			CRect rect;
-			CRect rect1;
-			height = dlg->m_pImgSrc->GetHeight();
-			width = dlg->m_pImgSrc->GetWidth();
-
-			dlg->mPictureControl.GetClientRect(&rect);
-			CDC *pDC = dlg->mPictureControl.GetDC();
-			SetStretchBltMode(pDC->m_hDC, STRETCH_HALFTONE);
-
-			if (width <= rect.Width() && height <= rect.Width())
-			{
-				rect1 = CRect(rect.TopLeft(), CSize(width, height));
-				dlg->m_pImgSrc->StretchBlt(pDC->m_hDC, rect1, SRCCOPY);
-			}
-			else
-			{
-				float xScale = (float)rect.Width() / (float)width;
-				float yScale = (float)rect.Height() / (float)height;
-				float ScaleIndex = (xScale <= yScale ? xScale : yScale);
-				rect1 = CRect(rect.TopLeft(), CSize((int)width*ScaleIndex, (int)height*ScaleIndex));
-				dlg->m_pImgSrc->StretchBlt(pDC->m_hDC, rect1, SRCCOPY);
-			}
-			dlg->ReleaseDC(pDC);
-		}
-	}
-	return 0;
-}
-
-/*void CExperimentImgDlg::ThreadDraw(DrawPara *p)
-{
-	CRect rect;
-	GetClientRect(&rect);
-	CDC     memDC;             // 用于缓冲绘图的内存画笔  
-	CBitmap memBitmap;         // 用于缓冲绘图的内存画布
-	memDC.CreateCompatibleDC(p->pDC);  // 创建与原画笔兼容的画笔
-	memBitmap.CreateCompatibleBitmap(p->pDC, p->width, p->height);  // 创建与原位图兼容的内存画布
-	memDC.SelectObject(&memBitmap);      // 创建画笔与画布的关联
-	memDC.FillSolidRect(rect, p->pDC->GetBkColor());
-	p->pDC->SetStretchBltMode(HALFTONE);
-	// 将pImgSrc的内容缩放画到内存画布中
-	p->pImgSrc->StretchBlt(memDC.m_hDC, 0, 0, p->width, p->height);
-
-	// 将已画好的画布复制到真正的缓冲区中
-	p->pDC->BitBlt(p->oriX, p->oriY, p->width, p->height, &memDC, 0, 0, SRCCOPY);
-	memBitmap.DeleteObject();
-	memDC.DeleteDC();
-}*/
-
-/*void CExperimentImgDlg::ImageCopy(CImage* pImgSrc, CImage* pImgDrt)
-{
-	int MaxColors = pImgSrc->GetMaxColorTableEntries();
-	RGBQUAD* ColorTab;
-	ColorTab = new RGBQUAD[MaxColors];
-
-	CDC *pDCsrc, *pDCdrc;
-	if (!pImgDrt->IsNull())
-	{
-		pImgDrt->Destroy();
-	}
-	pImgDrt->Create(pImgSrc->GetWidth(), pImgSrc->GetHeight(), pImgSrc->GetBPP(), 0);
-
-	if (pImgSrc->IsIndexed())
-	{
-		pImgSrc->GetColorTable(0, MaxColors, ColorTab);
-		pImgDrt->SetColorTable(0, MaxColors, ColorTab);
-	}
-
-	pDCsrc = CDC::FromHandle(pImgSrc->GetDC());
-	pDCdrc = CDC::FromHandle(pImgDrt->GetDC());
-	pDCdrc->BitBlt(0, 0, pImgSrc->GetWidth(), pImgSrc->GetHeight(), pDCsrc, 0, 0, SRCCOPY);
-	pImgSrc->ReleaseDC();
-	pImgDrt->ReleaseDC();
-	delete ColorTab;
-
-}*/
-
+//打开文件1按钮事件
 void CExperimentImgDlg::OnBnClickedButtonOpen()
 {
 	// TODO: 在此添加控件通知处理程序代码
@@ -326,17 +217,33 @@ void CExperimentImgDlg::OnBnClickedButtonOpen()
 	{
 		VERIFY(filePath = fileOpenDialog.GetPathName());
 		CString strFilePath(filePath);
-//		mEditInfo.SetWindowTextW(strFilePath);	//在文本框中显示图像路径
 
-		if (m_pImgSrc != NULL)
-		{
-			m_pImgSrc->Destroy();
-			delete m_pImgSrc;
-		}
-		m_pImgSrc = new CImage();
-		m_pImgSrc->Load(strFilePath);
+		//加载文件并缩放到dest image
+		CImage tmpImage;
+		tmpImage.Load(strFilePath);
+		ImageProcessor::ImageCopy(&tmpImage, m_pImage1);
 		this->Invalidate();
+	}
+}
 
+//打开文件2按钮事件
+void CExperimentImgDlg::OnBnClickedButtonOpen2()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	TCHAR szFilter[] = _T("JPEG(*jpg)|*.jpg|*.bmp|*.png|TIFF(*.tif)|*.tif|All Files （*.*）|*.*||");
+	CString filePath("");
+
+	CFileDialog fileOpenDialog(TRUE, NULL, NULL, OFN_HIDEREADONLY, szFilter);
+	if (fileOpenDialog.DoModal() == IDOK)
+	{
+		VERIFY(filePath = fileOpenDialog.GetPathName());
+		CString strFilePath(filePath);
+		//		mEditInfo.SetWindowTextW(strFilePath);	//在文本框中显示图像路径
+
+		CImage tmpImage;
+		tmpImage.Load(strFilePath);
+		ImageProcessor::ImageCopy(&tmpImage, m_pImage2);
+		this->Invalidate();
 	}
 }
 
@@ -351,8 +258,8 @@ void CExperimentImgDlg::OnNMCustomdrawSliderThreadnum(NMHDR *pNMHDR, LRESULT *pR
 	// TODO: 在此添加控件通知处理程序代码
 	CSliderCtrl *slider = (CSliderCtrl*)GetDlgItem(IDC_SLIDER_THREADNUM);
 	CString text("");
-	m_nThreadNum = slider->GetPos();
-	text.Format(_T("%d"), m_nThreadNum);
+	mThreadNum = slider->GetPos();
+	text.Format(_T("%d"), mThreadNum);
 	GetDlgItem(IDC_STATIC_THREADNUM)->SetWindowText(text);
 	*pResult = 0;
 }
@@ -365,67 +272,180 @@ void CExperimentImgDlg::OnBnClickedButtonProcess()
 	switch (func)
 	{
 	case 0:  //椒盐噪声
-		AddNoise();
+		mFunction_AddNoise();
 		break;
 	case 1: //自适应中值滤波
-		MedianFilter();
+		mFunction_MedianFilter();
 		break;
 	default:
 		break;
 	}
 }
 
-void CExperimentImgDlg::AddNoise()
+//【中值滤波】线程执行完毕的回调函数
+LRESULT CExperimentImgDlg::OnThreadMsgReceived_MedianFilter(WPARAM wParam, LPARAM lParam)
 {
-	CComboBox* cmb_thread = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
-	int thread = cmb_thread->GetCurSel();
-	CButton* clb_circulation = ((CButton*)GetDlgItem(IDC_CHECK_CIRCULATION));
-	int circulation = clb_circulation->GetCheck() == 0 ? 1:100;
-	startTime = CTime::GetTickCount();
-	switch (thread)
+	static int tempThreadCount = 0;
+	static int tempProcessCount = 0;
+	//CButton* clb_circulation = ((CButton*)GetDlgItem(IDC_CHECK_CIRCULATION));
+	int circulation = 1; //clb_circulation->GetCheck() == 0 ? 1 : 100;
+
+	//如果某一个线程执行完成
+	if ((int)wParam == 1)
+	{
+		++tempThreadCount;
+		// 当所有线程都返回了值1代表第一批线程执行完成~显示时间
+		if (mThreadNum == tempThreadCount)
+		{
+			CTime endTime = CTime::GetTickCount();
+			CString timeStr;
+			timeStr.Format(_T("耗时:%dms"), endTime - mStartTime);
+			tempThreadCount = 0;
+			tempProcessCount++;
+
+			//循环次数够了
+			AfxMessageBox(timeStr);
+			//主动触发picturebox的onPaint事件
+			::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
+		}
+	}
+	return 0;
+}
+
+//【椒盐噪声】线程执行完毕的回调函数
+LRESULT CExperimentImgDlg::OnThreadMsgReceived_AddNoise(WPARAM wParam, LPARAM lParam)
+{
+	static int tempThreadCount = 0;
+	static int tempProcessCount = 0;
+	//CButton* clb_circulation = ((CButton*)GetDlgItem(IDC_CHECK_CIRCULATION));
+	int circulation = 1;// clb_circulation->GetCheck() == 0 ? 1 : 100;
+
+	//如果某一个线程执行完成
+	if ((int)wParam == 1)
+	{
+		tempThreadCount++;
+		// 当所有线程都返回了值1代表第一批线程执行完成~显示时间
+		if (mThreadNum == tempThreadCount)
+		{
+			tempThreadCount = 0;
+			tempProcessCount++;
+
+			//循环次数够了
+			CTime endTime = CTime::GetTickCount();
+			CString timeStr;
+			timeStr.Format(_T("处理%d次,耗时:%dms"), circulation, endTime - mStartTime);
+			AfxMessageBox(timeStr);				
+			//主动触发picturebox的onPaint事件
+			::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
+		}
+	}
+	return 0;
+}
+
+//【图像旋转与三次插值】线程执行完毕的回调函数
+LRESULT CExperimentImgDlg::OnThreadMsgReceived_RotationWithBicubicFilter(WPARAM wParam, LPARAM lParam)
+{
+	static int tempThreadCount = 0;
+	static int tempProcessCount = 0;
+
+	//如果某一个线程执行完成
+	if ((int)wParam == 1)
+	{
+		tempThreadCount++;
+		// 当所有线程都返回了值1代表第一批线程执行完成~显示时间
+		if (mThreadNum == tempThreadCount)
+		{
+			tempThreadCount = 0;
+			tempProcessCount++;
+
+			//循环次数够了
+			CTime endTime = CTime::GetTickCount();
+			CString timeStr;
+			timeStr.Format(_T("处理%d次,耗时:%dms"), 1, endTime - mStartTime);
+			AfxMessageBox(timeStr);
+			//主动触发picturebox的onPaint事件
+			::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
+		}
+	}
+	return 0;
+}
+
+//【自动色阶】线程执行完毕的回调函数
+LRESULT CExperimentImgDlg::OnThreadMsgReceived_AutoColorGradation(WPARAM wParam, LPARAM lParam)
+{
+	return LRESULT();
+}
+
+//【自动白平衡】线程执行完毕的回调函数
+LRESULT CExperimentImgDlg::OnThreadMsgReceived_WhiteBalance(WPARAM wParam, LPARAM lParam)
+{
+	return LRESULT();
+}
+
+//【图像融合】线程执行完毕的回调函数
+LRESULT CExperimentImgDlg::OnThreadMsgReceived_ImageBlending(WPARAM wParam, LPARAM lParam)
+{
+	return LRESULT();
+}
+
+//【双边滤波】线程执行完毕的回调函数
+LRESULT CExperimentImgDlg::OnThreadMsgReceived_BilateralFilter(WPARAM wParam, LPARAM lParam)
+{
+	return LRESULT();
+}
+
+/*************************************
+
+					PRIVATE
+
+**************************************/
+
+void CExperimentImgDlg::mFunction_AddNoise()
+{
+	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
+	int parallelScheme = cmb_parallelScheme->GetCurSel();
+	mStartTime = CTime::GetTickCount();
+	switch (parallelScheme)
 	{
 	case 0://win多线程
 	{
-		ImageProcessor::AddNoise_WIN(m_pImgSrc, m_nThreadNum, m_pThreadParam);
+		ImageProcessor::AddNoise_WIN(m_pImage1, m_pImageResult, mThreadNum);
 		break;
 	}
 
 	//OpenMp
 	case 1:
 	{
-		ImageProcessor::AddNoise_OpenMP(m_pImgSrc, m_nThreadNum, m_pThreadParam);
+		ImageProcessor::AddNoise_OpenMP(m_pImage1, m_pImageResult, mThreadNum);
 		break;
 	}
 
 	case 2://boost
 	{
 		AfxMessageBox(_T("【椒盐噪声】算法未实现基于boost库的并行加速！"));
-		break; 
+		break;
 	}
 	}
 }
 
-void CExperimentImgDlg::MedianFilter()
+void CExperimentImgDlg::mFunction_MedianFilter()
 {
 	//从comboBox里面获取要演示的功能
-	CComboBox* cmb_thread = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
-	int thread = cmb_thread->GetCurSel();
-	CButton* clb_circulation = ((CButton*)GetDlgItem(IDC_CHECK_CIRCULATION));
-	int circulation = clb_circulation->GetCheck() == 0 ? 1 : 4;
+	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
+	int parallelScheme = cmb_parallelScheme->GetCurSel();
 
-	startTime = CTime::GetTickCount();
-	m_nThreadNum;
-	switch (thread)
+	mStartTime = CTime::GetTickCount();
+	switch (parallelScheme)
 	{
 	case 0://win多线程
 	{
-		ImageProcessor::MedianFilter_WIN(m_pImgSrc,m_nThreadNum,m_pThreadParam);
+		ImageProcessor::MedianFilter_WIN(m_pImage1, m_pImageResult, mThreadNum);
 		break;
 	}
 
 	case 1://openmp
 	{
-		ImageProcessor::MedianFilter_OpenMP(m_pImgSrc, m_nThreadNum, m_pThreadParam);
+		ImageProcessor::MedianFilter_OpenMP(m_pImage1, m_pImageResult, mThreadNum);
 		break;
 	}
 
@@ -435,78 +455,7 @@ void CExperimentImgDlg::MedianFilter()
 	}
 }
 
-//【中值滤波】线程执行完毕的回调函数
-LRESULT CExperimentImgDlg::OnMedianFilterThreadMsgReceived(WPARAM wParam, LPARAM lParam)
+void CExperimentImgDlg::OnBnClickedButton1()
 {
-	static int tempThreadCount = 0;
-	static int tempProcessCount = 0;
-	CButton* clb_circulation = ((CButton*)GetDlgItem(IDC_CHECK_CIRCULATION));
-	int circulation = clb_circulation->GetCheck() == 0 ? 1 : 100;
-
-	//如果某一个线程执行完成
-	if ((int)wParam == 1)
-	{
-		// 当所有线程都返回了值1代表第一批线程执行完成~显示时间
-		++tempThreadCount;
-		if (m_nThreadNum == tempThreadCount)
-		{
-			CTime endTime = CTime::GetTickCount();
-			CString timeStr;
-			timeStr.Format(_T("耗时:%dms"), endTime - startTime);
-			tempThreadCount = 0;
-			tempProcessCount++;
-
-			if (tempProcessCount < circulation)
-			{
-				//小于循环次数的话就再执行一波
-				ImageProcessor::MedianFilter_WIN(m_pImgSrc, m_nThreadNum, m_pThreadParam);
-			}
-			else
-			{
-				//循环次数够了
-				tempProcessCount = 0;
-				CTime endTime = CTime::GetTickCount();
-				CString timeStr;
-				timeStr.Format(_T("处理%d次,耗时:%dms"), circulation, endTime - startTime);
-				AfxMessageBox(timeStr);
-			}
-		}
-	}
-	return 0;
-}
-
-//【椒盐噪声】线程执行完毕的回调函数
-LRESULT CExperimentImgDlg::OnNoiseThreadMsgReceived(WPARAM wParam, LPARAM lParam)
-{
-	static int tempThreadCount = 0;
-	static int tempProcessCount = 0;
-	CButton* clb_circulation = ((CButton*)GetDlgItem(IDC_CHECK_CIRCULATION));
-	int circulation = clb_circulation->GetCheck() == 0 ? 1 : 100;
-
-	//如果某一个线程执行完成
-	if ((int)wParam == 1)
-	{
-		tempThreadCount++;
-		// 当所有线程都返回了值1代表第一批线程执行完成~显示时间
-		if (m_nThreadNum == tempThreadCount)
-		{
-			tempThreadCount = 0;
-			tempProcessCount++;
-			if (tempProcessCount < circulation)
-			{
-				//小于循环次数的话就再执行一波
-				ImageProcessor::AddNoise_WIN(m_pImgSrc, m_nThreadNum, m_pThreadParam);
-			}
-			else
-			{
-				//循环次数够了
-				tempProcessCount = 0;
-				CTime endTime = CTime::GetTickCount();
-				CString timeStr;
-				timeStr.Format(_T("处理%d次,耗时:%dms"), circulation, endTime - startTime);
-				AfxMessageBox(timeStr);
-			}
-		}
-	}
-	return 0;
+	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
 }
