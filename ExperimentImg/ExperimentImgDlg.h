@@ -5,6 +5,7 @@
 #pragma once
 #include "afxwin.h"
 #include "ImageProcessor.h"
+#include "afxcmn.h"
 
 
 // CExperimentImgDlg ¶Ô»°¿ò
@@ -32,7 +33,7 @@ public:
 
 	afx_msg LRESULT OnThreadMsgReceived_RotationWithBicubicFilter(WPARAM wParam, LPARAM lParam);
 
-	afx_msg LRESULT OnThreadMsgReceived_AutoColorGradation(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnThreadMsgReceived_AutoLevels(WPARAM wParam, LPARAM lParam);
 
 	afx_msg LRESULT OnThreadMsgReceived_WhiteBalance(WPARAM wParam, LPARAM lParam);
 
@@ -48,7 +49,7 @@ private:
 
 	void		mFunction_Rotate(float angle);
 
-	void		mFunction_AutoColorGradation();
+	void		mFunction_AutoLevels();
 
 	void		mFunction_AutoWhiteBalance();
 
@@ -84,6 +85,8 @@ public:
 	CStatic mPictureBox1;
 	CStatic mPictureBox2;
 	CStatic mPictureBox_Result;
+	CSliderCtrl mSlideControl_ThreadNum;
+	CSliderCtrl mSlideControl_Alpha;
 
 	afx_msg void OnBnClickedButtonOpen();
 	afx_msg void OnBnClickedButtonOpen2();
@@ -91,4 +94,5 @@ public:
 	afx_msg void OnNMCustomdrawSliderThreadnum(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnBnClickedButtonProcess();
 	afx_msg void OnBnClickedButton1();
+
 };

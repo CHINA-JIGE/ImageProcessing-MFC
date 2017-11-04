@@ -29,6 +29,8 @@ void CExperimentImgDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_PICTURE2, mPictureBox2);
 	DDX_Control(pDX, IDC_PICTURE3, mPictureBox_Result);
 	DDX_Control(pDX, IDC_BUTTON_OPEN, mButton_OpenFile1);
+	DDX_Control(pDX, IDC_SLIDER1, mSlideControl_Alpha);
+	DDX_Control(pDX, IDC_SLIDER_THREADNUM, mSlideControl_ThreadNum);
 }
 
 BEGIN_MESSAGE_MAP(CExperimentImgDlg, CDialogEx)
@@ -44,7 +46,7 @@ BEGIN_MESSAGE_MAP(CExperimentImgDlg, CDialogEx)
 	ON_MESSAGE(WM_NOISE, &CExperimentImgDlg::OnThreadMsgReceived_AddNoise)
 	ON_MESSAGE(WM_MEDIAN_FILTER, &CExperimentImgDlg::OnThreadMsgReceived_MedianFilter)
 	ON_MESSAGE(WM_BICUBIC_FILTER_ROTATION,&CExperimentImgDlg::OnThreadMsgReceived_RotationWithBicubicFilter)
-	ON_MESSAGE(WM_AUTO_COLOR_GRADATION, &CExperimentImgDlg::OnThreadMsgReceived_AutoColorGradation)
+	ON_MESSAGE(WM_AUTO_LEVELS, &CExperimentImgDlg::OnThreadMsgReceived_AutoLevels)
 	ON_MESSAGE(WM_AUTO_WHITE_BALANCE, &CExperimentImgDlg::OnThreadMsgReceived_WhiteBalance)
 	ON_MESSAGE(WM_IMAGE_BLENDING, &CExperimentImgDlg::OnThreadMsgReceived_ImageBlending)
 	ON_MESSAGE(WM_BILATERAL_FILTER, &CExperimentImgDlg::OnThreadMsgReceived_BilateralFilter)
@@ -101,11 +103,12 @@ BOOL CExperimentImgDlg::OnInitDialog()
 	cmb_thread->InsertString(2, _T("Boost多线程"));
 	cmb_thread->SetCurSel(0);
 
-	CSliderCtrl * slider = ((CSliderCtrl*)GetDlgItem(IDC_SLIDER_THREADNUM));
-	slider->SetRange(1, cMaxThreadNum, TRUE);
-	slider->SetPos(cMaxThreadNum);
+	mSlideControl_ThreadNum.SetRange(1, cMaxThreadNum, TRUE);
+	mSlideControl_ThreadNum.SetPos(cMaxThreadNum);
 
-	//AfxBeginThread((AFX_THREADPROC)&CExperimentImgDlg::Update, this);
+	mSlideControl_Alpha.SetRange(0, 100, TRUE);
+	mSlideControl_Alpha.SetPos(50);
+
 
 	//初始化result picture box的缓冲区
 	m_pImageResult = new CImage();
@@ -283,7 +286,7 @@ void CExperimentImgDlg::OnBnClickedButtonProcess()
 		mFunction_Rotate(0.789f);
 		break;
 	case 3://自动色阶
-		mFunction_AutoColorGradation();
+		mFunction_AutoLevels();
 		break;
 	case 4://自动白平衡
 		mFunction_AutoWhiteBalance();
@@ -298,6 +301,13 @@ void CExperimentImgDlg::OnBnClickedButtonProcess()
 		break;
 	}
 }
+
+//刷新图像
+void CExperimentImgDlg::OnBnClickedButton1()
+{
+	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
+}
+
 
 //【中值滤波】线程执行完毕的回调函数
 LRESULT CExperimentImgDlg::OnThreadMsgReceived_MedianFilter(WPARAM wParam, LPARAM lParam)
@@ -350,7 +360,7 @@ LRESULT CExperimentImgDlg::OnThreadMsgReceived_AddNoise(WPARAM wParam, LPARAM lP
 			//循环次数够了
 			CTime endTime = CTime::GetTickCount();
 			CString timeStr;
-			timeStr.Format(_T("处理%d次,耗时:%dms"), circulation, endTime - mStartTime);
+			timeStr.Format(_T("耗时:%dms"), endTime - mStartTime);
 			AfxMessageBox(timeStr);				
 			//主动触发picturebox的onPaint事件
 			::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
@@ -378,7 +388,7 @@ LRESULT CExperimentImgDlg::OnThreadMsgReceived_RotationWithBicubicFilter(WPARAM 
 			//循环次数够了
 			CTime endTime = CTime::GetTickCount();
 			CString timeStr;
-			timeStr.Format(_T("处理%d次,耗时:%dms"), 1, endTime - mStartTime);
+			timeStr.Format(_T("耗时:%dms"), endTime - mStartTime);
 			AfxMessageBox(timeStr);
 			//主动触发picturebox的onPaint事件
 			::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
@@ -388,27 +398,94 @@ LRESULT CExperimentImgDlg::OnThreadMsgReceived_RotationWithBicubicFilter(WPARAM 
 }
 
 //【自动色阶】线程执行完毕的回调函数
-LRESULT CExperimentImgDlg::OnThreadMsgReceived_AutoColorGradation(WPARAM wParam, LPARAM lParam)
+LRESULT CExperimentImgDlg::OnThreadMsgReceived_AutoLevels(WPARAM wParam, LPARAM lParam)
 {
-	return LRESULT();
+	//此算法就开了一个线程- -
+
+	if ((int)wParam == 1)
+	{
+		CTime endTime = CTime::GetTickCount();
+		CString timeStr;
+		timeStr.Format(_T("耗时:%dms"), endTime - mStartTime);
+		AfxMessageBox(timeStr);
+		//主动触发picturebox的onPaint事件
+		::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
+	}
+	return 0;
 }
 
 //【自动白平衡】线程执行完毕的回调函数
 LRESULT CExperimentImgDlg::OnThreadMsgReceived_WhiteBalance(WPARAM wParam, LPARAM lParam)
 {
-	return LRESULT();
+	if ((int)wParam == 1)
+	{
+		CTime endTime = CTime::GetTickCount();
+		CString timeStr;
+		timeStr.Format(_T("耗时:%dms"), endTime - mStartTime);
+		AfxMessageBox(timeStr);
+		//主动触发picturebox的onPaint事件
+		::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
+	}
+	return 0;
 }
 
 //【图像融合】线程执行完毕的回调函数
 LRESULT CExperimentImgDlg::OnThreadMsgReceived_ImageBlending(WPARAM wParam, LPARAM lParam)
 {
-	return LRESULT();
+	static int tempThreadCount = 0;
+	static int tempProcessCount = 0;
+	//CButton* clb_circulation = ((CButton*)GetDlgItem(IDC_CHECK_CIRCULATION));
+	int circulation = 1;// clb_circulation->GetCheck() == 0 ? 1 : 100;
+
+	//如果某一个线程执行完成
+	if ((int)wParam == 1)
+	{
+		tempThreadCount++;
+		// 当所有线程都返回了值1代表第一批线程执行完成~显示时间
+		if (mThreadNum == tempThreadCount)
+		{
+			tempThreadCount = 0;
+			tempProcessCount++;
+
+			//循环次数够了
+			CTime endTime = CTime::GetTickCount();
+			CString timeStr;
+			timeStr.Format(_T("耗时:%dms"), endTime - mStartTime);
+			AfxMessageBox(timeStr);
+			//主动触发picturebox的onPaint事件
+			::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
+		}
+	}
+	return 0;
 }
 
 //【双边滤波】线程执行完毕的回调函数
 LRESULT CExperimentImgDlg::OnThreadMsgReceived_BilateralFilter(WPARAM wParam, LPARAM lParam)
 {
-	return LRESULT();
+	static int tempThreadCount = 0;
+	static int tempProcessCount = 0;
+	int circulation = 1;// clb_circulation->GetCheck() == 0 ? 1 : 100;
+
+	//如果某一个线程执行完成
+	if ((int)wParam == 1)
+	{
+		tempThreadCount++;
+		// 当所有线程都返回了值1代表第一批线程执行完成~显示时间
+		if (mThreadNum == tempThreadCount)
+		{
+			tempThreadCount = 0;
+			tempProcessCount++;
+
+			//循环次数够了
+			CTime endTime = CTime::GetTickCount();
+			CString timeStr;
+			timeStr.Format(_T("耗时:%dms"), endTime - mStartTime);
+			AfxMessageBox(timeStr);
+			//主动触发picturebox的onPaint事件
+			::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
+		}
+	}
+	return 0;
 }
 
 /*************************************
@@ -419,12 +496,13 @@ LRESULT CExperimentImgDlg::OnThreadMsgReceived_BilateralFilter(WPARAM wParam, LP
 
 void CExperimentImgDlg::mFunction_AddNoise()
 {
+	//从comboBox里面获取多线程的方案
 	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
 	int parallelScheme = cmb_parallelScheme->GetCurSel();
 	mStartTime = CTime::GetTickCount();
 	switch (parallelScheme)
 	{
-	case 0://win多线程
+	case 0://mfc多线程
 	{
 		ImageProcessor::AddNoise_WIN(m_pImage1, m_pImageResult, mThreadNum);
 		break;
@@ -447,7 +525,7 @@ void CExperimentImgDlg::mFunction_AddNoise()
 
 void CExperimentImgDlg::mFunction_MedianFilter()
 {
-	//从comboBox里面获取要演示的功能
+	//从comboBox里面获取多线程的方案
 	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
 	int parallelScheme = cmb_parallelScheme->GetCurSel();
 
@@ -475,7 +553,7 @@ void CExperimentImgDlg::mFunction_MedianFilter()
 
 void CExperimentImgDlg::mFunction_Rotate(float angle)
 {
-	//从comboBox里面获取要演示的功能
+	//从comboBox里面获取多线程的方案
 	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
 	int parallelScheme = cmb_parallelScheme->GetCurSel();
 
@@ -500,24 +578,118 @@ void CExperimentImgDlg::mFunction_Rotate(float angle)
 	}
 }
 
-void CExperimentImgDlg::mFunction_AutoColorGradation()
+void CExperimentImgDlg::mFunction_AutoLevels()
 {
+	//从comboBox里面获取多线程的方案
+	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
+	int parallelScheme = cmb_parallelScheme->GetCurSel();
+	mStartTime = CTime::GetTickCount();
+
+	//自动色阶一开始用统计全图像素RGB动态范围，要是这也用多线程来统计，返回了之后
+	//再开多次多线程来映射颜色，这怕是要烦死 - -干脆就不让多线程了
+
+	switch (parallelScheme)
+	{
+	case 0://win多线程
+	{
+		AfxMessageBox(_T("【自动色阶】算法未实现基于MFC多线程的并行加速！"));
+		break;
+	}
+
+	case 1://openmp
+	{
+		ImageProcessor::AutoLevels_OpenMP(m_pImage1, m_pImageResult, 1);
+		break;
+	}
+
+	case 2://boost
+		AfxMessageBox(_T("【自动色阶】算法未实现基于boost库的并行加速！"));
+		break;
+	}
 }
 
 void CExperimentImgDlg::mFunction_AutoWhiteBalance()
 {
+	//从comboBox里面获取多线程的方案
+	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
+	int parallelScheme = cmb_parallelScheme->GetCurSel();
+	mStartTime = CTime::GetTickCount();
+
+	//自动色阶一开始用统计全图像素RGB动态范围，要是这也用多线程来统计，返回了之后
+	//再开多次多线程来映射颜色，这怕是要烦死 - -干脆就不让多线程了
+
+	switch (parallelScheme)
+	{
+	case 0://win多线程
+	{
+		AfxMessageBox(_T("【自动白平衡】算法未实现基于MFC多线程的并行加速！"));
+		break;
+	}
+
+	case 1://openmp
+	{
+		ImageProcessor::AutoWhiteBalance_OpenMP(m_pImage1, m_pImageResult, 1);
+		break;
+	}
+
+	case 2://boost
+		AfxMessageBox(_T("【自动白平衡】算法未实现基于boost库的并行加速！"));
+		break;
+	}
 }
 
 void CExperimentImgDlg::mFunction_ImageBlending()
 {
+	//从comboBox里面获取多线程的方案
+	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
+	int parallelScheme = cmb_parallelScheme->GetCurSel();
+	mStartTime = CTime::GetTickCount();
+
+	//获取融合的alpha值
+	float alpha = mSlideControl_Alpha.GetPos() / float(mSlideControl_Alpha.GetRangeMax());
+	switch (parallelScheme)
+	{
+	case 0://win多线程
+	{
+		ImageProcessor::ImageBlending_WIN(m_pImage1, m_pImage2, m_pImageResult, mThreadNum, alpha);
+		break;
+	}
+
+	case 1://openmp
+	{
+		ImageProcessor::ImageBlending_OpenMP(m_pImage1,m_pImage2, m_pImageResult, mThreadNum, alpha);
+		break;
+	}
+
+	case 2://boost
+		AfxMessageBox(_T("【图像融合】算法未实现基于boost库的并行加速！"));
+		break;
+	}
 }
 
 void CExperimentImgDlg::mFunction_BilateralFilter()
 {
+	//从comboBox里面获取多线程的方案
+	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
+	int parallelScheme = cmb_parallelScheme->GetCurSel();
+	mStartTime = CTime::GetTickCount();
+
+	switch (parallelScheme)
+	{
+	case 0://win多线程
+	{
+		AfxMessageBox(_T("【双边滤波】算法未实现基于MFC多线程的并行加速！"));
+		break;
+	}
+
+	case 1://openmp
+	{
+		AfxMessageBox(_T("【双边滤波】算法未实现基于OpenMP并行加速！"));		break;
+	}
+
+	case 2://boost
+		ImageProcessor::BilateralFilter_BOOST(m_pImage1, m_pImageResult, mThreadNum);
+		break;
+	}
 }
 
-
-void CExperimentImgDlg::OnBnClickedButton1()
-{
-	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
-}

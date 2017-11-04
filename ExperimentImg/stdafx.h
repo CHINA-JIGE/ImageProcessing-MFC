@@ -52,8 +52,8 @@
 #endif
 
 //自动色阶
-#ifndef WM_AUTO_COLOR_GRADATION
-#define WM_AUTO_COLOR_GRADATION WM_USER+4
+#ifndef WM_AUTO_LEVELS
+#define WM_AUTO_LEVELS WM_USER+4
 #endif
 
 //自动白平衡

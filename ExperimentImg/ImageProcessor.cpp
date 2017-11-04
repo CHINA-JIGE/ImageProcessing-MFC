@@ -3,6 +3,7 @@
 #include <vector>
 #include <algorithm>
 
+//中值滤波用到，不知道干嘛的。。。
 static bool GetValue(int p[], int size, int &value)
 {
 	//数组中间的值
@@ -77,8 +78,10 @@ void ImageProcessor::ImageCopy(CImage * pImgSrc, CImage * pImgDest)
 
 			int sampleCoordX = int(srcWidth * normalizedX);
 			int sampleCoordY = int(srcHeight * normalizedY);
-			COLORREF sampleColor = pImgSrc->GetPixel(sampleCoordX, sampleCoordY);
-			pImgDest->SetPixel(i, j, sampleColor);
+			COLOR3 c = mFunction_GetPixel(pImgSrc, sampleCoordX, sampleCoordY);
+			mFunction_SetPixel(pImgDest, i, j, c);
+			//COLORREF sampleColor =pImgSrc->GetPixel(sampleCoordX, sampleCoordY);
+			//pImgDest->SetPixel(i, j, sampleColor);
 		}
 	}
 }
@@ -87,7 +90,7 @@ UINT ImageProcessor::MedianFilter_WIN(CImage* pImgSrc, CImage* pImgDest, int num
 {
 	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
 
-	ThreadParam* pParamArray = new ThreadParam[cMaxThreadNum];
+	ThreadParam* pParamArray = new ThreadParam[numThreads];
 	for (int i = 0; i < numThreads; ++i)
 	{
 		pParamArray[i].startIndex = i * subLength;
@@ -108,11 +111,11 @@ UINT ImageProcessor::MedianFilter_OpenMP(CImage* pImgSrc, CImage* pImgDest, int 
 {
 	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
 
-	ThreadParam* pParamArray = new ThreadParam[cMaxThreadNum];
+	ThreadParam* pParamArray = new ThreadParam[numThreads];
 	//OpenMP 并不是一个简单的函数库，而是被众多【编译器】所支持的并行计算
 	//框架/协议，只需要在一个for前面加上#pragma omp parallel xxxxx 就可以
 	//很舒服地把并行化的工作扔给编译器做，简直6666666666666！！！
-#pragma omp parallel for num_threads(mThreadNum)
+#pragma omp parallel for num_threads(numThreads)
 	for (int i = 0; i < numThreads; ++i)
 	{
 		pParamArray[i].startIndex = i * subLength;
@@ -129,7 +132,7 @@ UINT ImageProcessor::MedianFilter_OpenMP(CImage* pImgSrc, CImage* pImgDest, int 
 UINT ImageProcessor::AddNoise_WIN(CImage* pImgSrc, CImage* pImgDest, int numThreads)
 {
 	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
-	ThreadParam* pParamArray = new ThreadParam[cMaxThreadNum];
+	ThreadParam* pParamArray = new ThreadParam[numThreads];
 	for (int i = 0; i < numThreads; ++i)
 	{
 		pParamArray[i].startIndex = i * subLength;
@@ -147,7 +150,7 @@ UINT ImageProcessor::AddNoise_WIN(CImage* pImgSrc, CImage* pImgDest, int numThre
 UINT ImageProcessor::AddNoise_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads)
 {
 	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
-	ThreadParam* pParamArray = new ThreadParam[cMaxThreadNum];
+	ThreadParam* pParamArray = new ThreadParam[numThreads];
 	//OpenMP 并不是一个简单的函数库，而是被众多【编译器】所支持的并行计算
 	//框架/协议，只需要在一个for前面加上#pragma omp parallel xxxxx 就可以
 	//很舒服地把并行化的工作扔给编译器做，简直6666666666666！！！
@@ -167,7 +170,7 @@ UINT ImageProcessor::AddNoise_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numT
 UINT ImageProcessor::Rotate_WIN(CImage * pImgSrc, CImage * pImgDest, int numThreads, float radianAngle)
 {
 	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
-	ThreadParam_Rotation* pParamArray = new ThreadParam_Rotation[cMaxThreadNum];
+	ThreadParam_Rotation* pParamArray = new ThreadParam_Rotation[numThreads];
 	for (int i = 0; i < numThreads; ++i)
 	{
 		pParamArray[i].startIndex = i * subLength;
@@ -186,7 +189,7 @@ UINT ImageProcessor::Rotate_WIN(CImage * pImgSrc, CImage * pImgDest, int numThre
 UINT ImageProcessor::Rotate_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numThreads, float radianAngle)
 {
 	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
-	ThreadParam_Rotation* pParamArray = new ThreadParam_Rotation[cMaxThreadNum];
+	ThreadParam_Rotation* pParamArray = new ThreadParam_Rotation[numThreads];
 	//OpenMP 并不是一个简单的函数库，而是被众多【编译器】所支持的并行计算
 	//框架/协议，只需要在一个for前面加上#pragma omp parallel xxxxx 就可以
 	//很舒服地把并行化的工作扔给编译器做，简直6666666666666！！！
@@ -204,14 +207,103 @@ UINT ImageProcessor::Rotate_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numT
 	return 0;
 }
 
+UINT ImageProcessor::AutoLevels_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numThreads)
+{
+	ThreadParam_AutoLevels param;
+	//OpenMP 并不是一个简单的函数库，而是被众多【编译器】所支持的并行计算
+	param.pSrc = pImgSrc;
+	param.pDest = pImgDest;
+	ImageProcessor::mFunction_AutoLevels(&param);
+	return 0;
+}
+
+UINT ImageProcessor::AutoWhiteBalance_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numThreads)
+{
+	ThreadParam_AutoWhiteBalance param;
+	//OpenMP 并不是一个简单的函数库，而是被众多【编译器】所支持的并行计算
+	param.pSrc = pImgSrc;
+	param.pDest = pImgDest;
+	ImageProcessor::mFunction_AutoWhiteBalance(&param);
+	return 0;
+}
+
+UINT ImageProcessor::ImageBlending_WIN(CImage * pImgSrc1, CImage * pImgSrc2, CImage * pImgDest, int numThreads, float alpha)
+{
+	//it's been assumed that img1 / img2 / imgDest are with SAME SIZE!!!!
+
+	int w = pImgSrc1->GetWidth();
+	int h = pImgSrc1->GetHeight();
+	int subLength = w* h / numThreads;
+	ThreadParam_ImageBlending* pParamArray = new ThreadParam_ImageBlending[numThreads];
+	for (int i = 0; i < numThreads; ++i)
+	{
+		pParamArray[i].startIndex = i * subLength;
+		pParamArray[i].endIndex = i != numThreads - 1 ?
+			(i + 1) * subLength - 1 : w * h - 1;
+		pParamArray[i].pSrc1 = pImgSrc1;
+		pParamArray[i].pSrc2 = pImgSrc2;
+		pParamArray[i].pDest = pImgDest;
+		pParamArray[i].alpha = alpha;
+
+		//new thread
+		AfxBeginThread((AFX_THREADPROC)&ImageProcessor::mFunction_ImageBlending, &pParamArray[i]);
+	}
+	return 0;
+}
+
+UINT ImageProcessor::ImageBlending_OpenMP(CImage * pImgSrc1, CImage * pImgSrc2, CImage * pImgDest, int numThreads, float alpha)
+{
+	int w = pImgSrc1->GetWidth();
+	int h = pImgSrc1->GetHeight();
+	int subLength = w* h / numThreads;
+	ThreadParam_ImageBlending* pParamArray = new ThreadParam_ImageBlending[numThreads];
+	//OpenMP 并不是一个简单的函数库，而是被众多【编译器】所支持的并行计算
+	//框架/协议，只需要在一个for前面加上#pragma omp parallel xxxxx 就可以
+	//很舒服地把并行化的工作扔给编译器做，简直6666666666666！！！
+#pragma omp parallel for num_threads(mThreadNum)
+	for (int i = 0; i < numThreads; ++i)
+	{
+		pParamArray[i].startIndex = i * subLength;
+		pParamArray[i].endIndex = i != numThreads - 1 ?
+			(i + 1) * subLength - 1 : w * h - 1;
+		pParamArray[i].pSrc1 = pImgSrc1;
+		pParamArray[i].pSrc2 = pImgSrc2;
+		pParamArray[i].pDest = pImgDest;
+		pParamArray[i].alpha = alpha;
+		ImageProcessor::mFunction_ImageBlending(&pParamArray[i]);
+	}
+	return 0;
+}
+
+UINT ImageProcessor::BilateralFilter_BOOST(CImage * pImgSrc, CImage * pImgDest, int numThreads)
+{
+	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
+	ThreadParam_BilateralFilter* pParamArray = new ThreadParam_BilateralFilter[numThreads];
+	//OpenMP 并不是一个简单的函数库，而是被众多【编译器】所支持的并行计算
+	//框架/协议，只需要在一个for前面加上#pragma omp parallel xxxxx 就可以
+	//很舒服地把并行化的工作扔给编译器做，简直6666666666666！！！
+#pragma omp parallel for num_threads(mThreadNum)
+	for (int i = 0; i < numThreads; ++i)
+	{
+		pParamArray[i].startIndex = i * subLength;
+		pParamArray[i].endIndex = i != numThreads - 1 ?
+			(i + 1) * subLength - 1 : pImgSrc->GetWidth() * pImgSrc->GetHeight() - 1;
+		pParamArray[i].pSrc = pImgSrc;
+		pParamArray[i].pDest = pImgDest;
+		pParamArray[i].sigma_d = 8.0f;
+		pParamArray[i].sigma_r = 20.0f;
+		ImageProcessor::mFunction_BilateralFilter(&pParamArray[i]);
+	}
+	return 0;
+}
+
 /**************************************
 
 						PRIVATE
 
 ***************************************/
 
-//template <int bytesPerPixel>
-inline void ImageProcessor::mFunction_SetPixel(CImage* pImage, int x, int y, COLOR3 c)
+inline void ImageProcessor::mFunction_SetPixel(CImage* pImage, int x, int y,const COLOR3& c)
 {
 	//int bytesPerPixel = pImage->GetBPP() / 8;
 	const int bytesPerPixel = 3;
@@ -224,7 +316,6 @@ inline void ImageProcessor::mFunction_SetPixel(CImage* pImage, int x, int y, COL
 
 }
 
-//template <int bytesPerPixel>
 inline COLOR3 ImageProcessor::mFunction_GetPixel(CImage * pImage, int x, int y)
 {
 	//int bytesPerPixel = pImage->GetBPP() / 8;
@@ -237,7 +328,6 @@ inline COLOR3 ImageProcessor::mFunction_GetPixel(CImage * pImage, int x, int y)
 	byte b = *(pData + pitch*y + x*bytesPerPixel + 0);
 	return COLOR3(r, g, b);
 }
-
 
 UINT ImageProcessor::mFunction_MedianFilterForTargetRegion(LPVOID  pThreadParam)
 {
@@ -394,5 +484,258 @@ UINT ImageProcessor::mFunction_RotateForTargetRegion(LPVOID pThreadParam)
 		mFunction_SetPixel(param->pDest, x, y, sampleColor);
 	}
 	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_BICUBIC_FILTER_ROTATION, 1, NULL);
+	return 0;
+}
+
+UINT ImageProcessor::mFunction_AutoLevels(LPVOID pThreadParam)
+{
+	//在这里自动色阶被搞成了单线程算法...
+	ThreadParam_AutoLevels* param = (ThreadParam_AutoLevels*)pThreadParam;
+	int maxWidth = param->pSrc->GetWidth();
+	int maxHeight = param->pSrc->GetHeight();
+
+	/*
+	自动色阶的逻辑:
+	f x<x_min:  y=0.0;
+	if x>x_max:  y=1.0;
+	if x_min < x< x_max:   y=(x-x_min)/(x_max-x_min); 
+	*/
+
+	//统计像素值时低切与高切的threshold
+	const byte lowCut = 20;
+	const byte highCut = 230;
+
+	//统计直方图
+	byte maxR = 0, maxG = 0, maxB = 0;
+	byte minR= 255,	minG= 255,	minB= 255;
+#pragma omp parallel for num_threads(mThreadNum)
+	for (int j = 0; j < maxHeight; ++j)
+	{
+		for (int i = 0; i < maxWidth; ++i)
+		{
+			COLOR3 c = mFunction_GetPixel(param->pSrc, i, j);
+			if (c.r > maxR)maxR = c.r;
+			if (c.g > maxG)maxG = c.g;
+			if (c.b > maxB)maxB = c.b;
+			if (c.r < minR)minR = c.r;
+			if (c.g < minG)minG = c.g;
+			if (c.b < minB)minB = c.b;
+		}
+	}
+	if (maxR > highCut)maxR = highCut;
+	if (maxG > highCut)maxG = highCut;
+	if (maxB > highCut)maxB = highCut;
+	if (minR < lowCut)minR = lowCut;
+	if (minG < lowCut)minG = lowCut;
+	if (minB < lowCut)minB = lowCut;
+
+
+	//映射颜色区间
+	byte rangeR = maxR - minR;
+	byte rangeG = maxG - minG;
+	byte rangeB = maxB - minB;
+#pragma omp parallel for num_threads(mThreadNum)
+	for (int j = 0; j < maxHeight; ++j)
+	{
+		for (int i = 0; i < maxWidth; ++i)
+		{
+			COLOR3 c = mFunction_GetPixel(param->pSrc, i, j);
+
+			//如果某个通道的动态范围是0，那还调什么色阶啊
+			if (rangeR != 0)
+			{
+				float ratioR = float(c.r - minR) / rangeR;
+				if(ratioR>=0.0f && ratioR<=1.0f) c.r = byte(255.0f * ratioR);
+			}
+
+			if (rangeG != 0)
+			{
+				float ratioG = float(c.g - minG) / rangeG;
+				if (ratioG >= 0.0f && ratioG<=1.0f)c.g = byte(255.0f * ratioG);
+			}
+
+			if (rangeB != 0)
+			{
+				float ratioB = float(c.b - minB) / rangeB;
+				if (ratioB >= 0.0f && ratioB<=1.0f)c.b = byte(255.0f * ratioB);
+			}
+
+			//输出
+			mFunction_SetPixel(param->pDest,i, j, c);
+		}
+	}
+
+	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_AUTO_LEVELS, 1, NULL);
+	return 0;
+}
+
+UINT ImageProcessor::mFunction_AutoWhiteBalance(LPVOID pThreadParam)
+{
+	//在这里自动色阶被搞成了单线程算法...
+	ThreadParam_AutoLevels* param = (ThreadParam_AutoLevels*)pThreadParam;
+	int maxWidth = param->pSrc->GetWidth();
+	int maxHeight = param->pSrc->GetHeight();
+
+	/*
+	自动白平衡的逻辑:
+	灰度世界算法（Gray World)是以灰度世界假设为基础的,该假设认为对于一幅有着大量色彩变化的图像,
+	R、 G、 B 三个分量的平均值趋于同一个灰度K。一般有两种方法来确定该灰度。
+	(1)直接给定为固定值, 取其各通道最大值的一半,即取为127或128；
+	(2)令 K = (R_avg+G_avg+B_avg)/3,其中R_aver,G_aver,B_aver分别表示红、 绿、 蓝三个通道的平均值。
+	算法的第二步是分别计算各通道的增益：
+	Kr=K/R_avg;
+	Kg=K/G_avg;
+	Kb=K/B_avg;
+	 算法第三步为根据Von Kries 对角模型,对于图像中的每个像素R、G、B，计算其结果值：
+	 Rnew = R * Kr;
+	 Gnew = G * Kg;
+	 Bnew = B * Kb;
+	*/
+
+
+	//三通道像素值平均值
+	float avgR=0.0f, avgG=0.0f, avgB=0.0f;
+	float K = 0;
+	//颜色增益
+	float Kr, Kg, Kb;
+
+	uint64_t sumR = 0, sumG = 0, sumB = 0;
+	for (int j = 0; j < maxHeight; ++j)
+	{
+		for (int i = 0; i < maxWidth; ++i)
+		{
+			COLOR3 c = mFunction_GetPixel(param->pSrc, i, j);
+			sumR += c.r;
+			sumG += c.g;
+			sumB += c.b;
+		}
+	}
+	avgR = (double(sumR) / (maxWidth*maxHeight));
+	avgG = (double(sumG) / (maxWidth*maxHeight));
+	avgB = (double(sumB) / (maxWidth*maxHeight));
+	K = (avgR + avgG + avgB) / 3.0f;
+	Kr = K / avgR;
+	Kg = K / avgG;
+	Kb = K / avgB;
+
+
+#pragma omp parallel for num_threads(mThreadNum)
+	for (int j = 0; j < maxHeight; ++j)
+	{
+		for (int i = 0; i < maxWidth; ++i)
+		{
+			COLOR3 c = mFunction_GetPixel(param->pSrc, i, j);
+
+			//颜色各分量乘以增益
+			int r = int(c.r * Kr);
+			int g = int(c.g * Kg);
+			int b = int(c.b * Kb);
+			if (r > 255)r = 255;
+			if (g > 255)g = 255;
+			if (b > 255)b = 255;
+			c.r =r;
+			c.g = g;
+			c.b = b;
+
+			//输出
+			mFunction_SetPixel(param->pDest, i, j, c);
+		}
+	}
+
+	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_AUTO_WHITE_BALANCE, 1, NULL);
+	return 0;
+}
+
+UINT ImageProcessor::mFunction_ImageBlending(LPVOID pThreadParam)
+{
+	//在这里自动色阶被搞成了单线程算法...
+	ThreadParam_ImageBlending* param = (ThreadParam_ImageBlending*)pThreadParam;
+	int maxWidth = param->pSrc1->GetWidth();
+	int maxHeight = param->pSrc1->GetHeight();
+
+	for (int i = param->startIndex; i <= param->endIndex; ++i)
+	{
+		int x = i % maxWidth;
+		int y = i / maxWidth;
+
+		COLOR3 c1 = mFunction_GetPixel(param->pSrc1, x, y);
+		COLOR3 c2 = mFunction_GetPixel(param->pSrc2, x, y);
+		float alpha = param->alpha;
+		COLOR3 c =
+		{
+			byte(c2.r * alpha + c1.r * (1.0f - alpha)),
+			byte(c2.g * alpha + c1.g * (1.0f - alpha)),
+			byte(c2.b * alpha + c1.b * (1.0f - alpha))
+		};
+
+		//输出
+		mFunction_SetPixel(param->pDest, x,y, c);
+	}
+
+	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_IMAGE_BLENDING, 1, NULL);
+	return 0;
+}
+
+UINT ImageProcessor::mFunction_BilateralFilter(LPVOID pThreadParam)
+{
+	/*
+	这个函数是有那么一点点刺激吧，算是高斯滤波的一种改进
+	综合了定义域和值域来计算每一个权重矩阵的系数
+	具体看看struct BilateralFilterMaskMatrix 那里的注释吧
+	*/
+	ThreadParam_BilateralFilter* param = (ThreadParam_BilateralFilter*)pThreadParam;
+	int maxWidth = param->pSrc->GetWidth();
+	int maxHeight = param->pSrc->GetHeight();
+
+	//移动权值矩阵的尺寸
+	int stencilMatrixHalfW = BilateralFilterWeightMatrix::cMatrixHalfWidth;
+	int stencilMatrixHalfH = BilateralFilterWeightMatrix::cMatrixHalfHeight;
+	int stencilMatrixW = BilateralFilterWeightMatrix::cMatrixWidth;
+	int stencilMatrixH = BilateralFilterWeightMatrix::cMatrixHeight;
+
+	for (int i = param->startIndex; i <= param->endIndex; ++i)
+	{
+		int x = i % maxWidth;
+		int y = i / maxWidth;
+
+		//为了我自己舒服一点，边界的像素我是打算忽略掉不滤波的- -
+		//这个if保证了每个考察的像素点(i,j)都可以忽略边界条件地使用权值矩阵
+		if (x >= stencilMatrixHalfW  && x < (maxWidth - stencilMatrixHalfW) &&
+			y >= stencilMatrixHalfH  && y < (maxHeight - stencilMatrixHalfH))
+		{
+			//每一个像素点(i,j)我们都要计算它的双边滤波权重矩阵
+			BilateralFilterWeightMatrix weightMatrixR;
+			BilateralFilterWeightMatrix weightMatrixG;
+			BilateralFilterWeightMatrix weightMatrixB;
+
+			//由于每次计算权重矩阵我们都要计算“值域核”，这意味着原图像的这一小
+			//矩阵区域的像素都要传进去...好麻烦啊。
+			//而且好像是是对于【灰度图】做的操作，所以可能要一个个通道地处理了啊
+			std::vector<byte> imageRegionR(stencilMatrixW * stencilMatrixH);
+			std::vector<byte> imageRegionG(stencilMatrixW * stencilMatrixH);
+			std::vector<byte> imageRegionB(stencilMatrixW * stencilMatrixH);
+			for (int l = -stencilMatrixHalfH; l <= stencilMatrixHalfH; ++l)
+			{
+				for (int k = -stencilMatrixHalfW; k <= stencilMatrixHalfW; ++k)
+				{
+					COLOR3 c = mFunction_GetPixel(param->pSrc, x + k, y + l);
+					int index = (l + stencilMatrixHalfH) * stencilMatrixW + (k + stencilMatrixHalfW);
+					imageRegionR[index] = c.r;
+					imageRegionG[index] = c.g;
+					imageRegionB[index] = c.b;
+				}
+			}
+
+			//为考察点(i,j)的每个通道都计算权值矩阵
+			float resultR = weightMatrixR.ComputeValue(param->sigma_d, param->sigma_r, imageRegionR);
+			float resultG = weightMatrixG.ComputeValue(param->sigma_d, param->sigma_r, imageRegionG);
+			float resultB = weightMatrixB.ComputeValue(param->sigma_d, param->sigma_r, imageRegionB);
+
+			COLOR3 result = { byte(resultR),byte(resultG),byte(resultB) };
+			mFunction_SetPixel(param->pDest, x, y, result);
+		}
+	}
+
+	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_BILATERAL_FILTER, 1, NULL);
 	return 0;
 }
