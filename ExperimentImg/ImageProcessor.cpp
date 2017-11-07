@@ -167,7 +167,7 @@ UINT ImageProcessor::AddNoise_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numT
 	return 0;
 }
 
-UINT ImageProcessor::Rotate_WIN(CImage * pImgSrc, CImage * pImgDest, int numThreads, float radianAngle)
+UINT ImageProcessor::Rotate_WIN(CImage * pImgSrc, CImage * pImgDest, int numThreads, float radianAngle,float scaleFactor)
 {
 	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
 	ThreadParam_Rotation* pParamArray = new ThreadParam_Rotation[numThreads];
@@ -179,14 +179,14 @@ UINT ImageProcessor::Rotate_WIN(CImage * pImgSrc, CImage * pImgDest, int numThre
 		pParamArray[i].pSrc = pImgSrc;
 		pParamArray[i].pDest = pImgDest;
 		pParamArray[i].radianAngle = radianAngle;
-
+		pParamArray[i].scaleFactor = scaleFactor;
 		//new thread
 		AfxBeginThread((AFX_THREADPROC)&ImageProcessor::mFunction_RotateForTargetRegion, &pParamArray[i]);
 	}
 	return 0;
 }
 
-UINT ImageProcessor::Rotate_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numThreads, float radianAngle)
+UINT ImageProcessor::Rotate_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numThreads, float radianAngle,float scaleFactor)
 {
 	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
 	ThreadParam_Rotation* pParamArray = new ThreadParam_Rotation[numThreads];
@@ -202,6 +202,7 @@ UINT ImageProcessor::Rotate_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numT
 		pParamArray[i].pSrc = pImgSrc;
 		pParamArray[i].pDest = pImgDest;
 		pParamArray[i].radianAngle = radianAngle;
+		pParamArray[i].scaleFactor = scaleFactor;
 		ImageProcessor::mFunction_RotateForTargetRegion(&pParamArray[i]);
 	}
 	return 0;
@@ -444,6 +445,7 @@ UINT ImageProcessor::mFunction_RotateForTargetRegion(LPVOID pThreadParam)
 	int startIndex = param->startIndex;
 	int endIndex = param->endIndex;
 	float angle = param->radianAngle;//旋转角度
+	float scaleFactor = param->scaleFactor;
 
 	//整个过程就像在写pixel shader
 	for (int i = startIndex; i <= endIndex; ++i)
@@ -452,28 +454,50 @@ UINT ImageProcessor::mFunction_RotateForTargetRegion(LPVOID pThreadParam)
 		int y = i / maxWidth;
 
 		//normalized X Y are mapped to [-1,1], centered at the center of screen
-		float normalizedX = float(x - halfPixelWidth) / halfPixelWidth;
-		float normalizedY = float(halfPixelHeight - y) / halfPixelHeight;
-
+		float centeredPixelX = float(x - halfPixelWidth) *(1.0f / scaleFactor);
+		float centeredPixelY = float(halfPixelHeight - y)*(1.0f / scaleFactor);
 		/*
 		[cos	sin]	[x]
 		[-sin	cos]	[y]
 		*/
 
 		//缩放图片，此处的缩放系数和缩放效果成【反比】，自己好好想想
-		float scaleFactor = 0.6f;
-		float aspectRatio = 0.666f;
-		float rotatedNormX = (1.0f/scaleFactor)* (normalizedX  * cosf(angle) + normalizedY * sinf(angle));
-		float rotatedNormY = (1.0f / scaleFactor) * aspectRatio * (normalizedX * sinf(angle) - normalizedY * sinf(angle));
+		float centeredRotatedPixelX =  -(centeredPixelX  * cosf(angle) - centeredPixelY * sinf(angle));
+		float centeredRotatedPixelY =  -(centeredPixelX * sinf(angle) + centeredPixelY * cosf(angle));
 		
+		//fRotatedPixelX和Y的除以scaleFactor是纹理的放缩
+		float fRotatedPixelX = (centeredRotatedPixelX + halfPixelWidth) / 2.0f / scaleFactor;
+		float fRotatedPixelY = (halfPixelHeight - centeredRotatedPixelY) / 2.0f / scaleFactor;
+
 		COLOR3 sampleColor;
 		//如果当前像素旋转后没有出界（意味着可以采样）
-		if (rotatedNormX > -1.0f && rotatedNormX < 1.0f &&
-			rotatedNormY > -1.0f && rotatedNormY < 1.0f)
+		if (fRotatedPixelX >= 0 && fRotatedPixelX < maxWidth-1 &&
+			fRotatedPixelY >= 0 && fRotatedPixelY < maxHeight-1)
 		{
-			int rotatedPixelX = int((rotatedNormX + 1.0f)/2.0f * maxWidth);
-			int rotatedPixelY = int((1.0f -rotatedNormY)/2.0f  * maxHeight);
-			sampleColor = mFunction_GetPixel(param->pSrc, rotatedPixelX, rotatedPixelY);
+			int rotatedPixelX = int(fRotatedPixelX);
+			int rotatedPixelY = int(fRotatedPixelY);
+			COLOR3 c1 = mFunction_GetPixel(param->pSrc, rotatedPixelX, rotatedPixelY);
+			COLOR3 c2 = mFunction_GetPixel(param->pSrc, rotatedPixelX+1, rotatedPixelY);
+			COLOR3 c3 = mFunction_GetPixel(param->pSrc, rotatedPixelX, rotatedPixelY+1);
+			COLOR3 c4 = mFunction_GetPixel(param->pSrc, rotatedPixelX+1, rotatedPixelY+1);
+			//插值系数
+			float t1 = fRotatedPixelX - float(rotatedPixelX);
+			float t2 = fRotatedPixelY - float(rotatedPixelY);
+
+			//Hermite三阶插值
+			auto Hermite = [](float t, const COLOR3& c1, const COLOR3& c2)->COLOR3
+			{
+				//hermite插值的卷积核  : 2|x|^3 - 3|x|^2 +1，把考察点放在卷积核函数的原点
+				float factor1 = 2.0f * t * t * t - 3.0f * t * t + 1.0f;
+				float factor2 = 2.0f * (1.0f-t) * (1.0f - t) * (1.0f - t) - 3.0f * (1.0f - t) * (1.0f - t) + 1.0f;
+				return COLOR3(
+					c1.r * factor1 + c2.r*factor2,
+					c1.g * factor1 + c2.g*factor2,
+					c1.b * factor1 + c2.b*factor2);
+			};
+			COLOR3 tmp1 = Hermite(t1, c1, c2);
+			COLOR3 tmp2 = Hermite(t1, c3, c4);
+			sampleColor = Hermite(t2, tmp1, tmp2);
 		}
 		else
 		{
@@ -710,7 +734,7 @@ UINT ImageProcessor::mFunction_BilateralFilter(LPVOID pThreadParam)
 
 			//由于每次计算权重矩阵我们都要计算“值域核”，这意味着原图像的这一小
 			//矩阵区域的像素都要传进去...好麻烦啊。
-			//而且好像是是对于【灰度图】做的操作，所以可能要一个个通道地处理了啊
+			//而且好像是是对于【灰度图】做的操作，所以要一个个通道地处理了啊
 			std::vector<byte> imageRegionR(stencilMatrixW * stencilMatrixH);
 			std::vector<byte> imageRegionG(stencilMatrixW * stencilMatrixH);
 			std::vector<byte> imageRegionB(stencilMatrixW * stencilMatrixH);
@@ -726,13 +750,19 @@ UINT ImageProcessor::mFunction_BilateralFilter(LPVOID pThreadParam)
 				}
 			}
 
-			//为考察点(i,j)的每个通道都计算权值矩阵
+			//为考察点(i,j)的每个通道都最终输出值
 			float resultR = weightMatrixR.ComputeValue(param->sigma_d, param->sigma_r, imageRegionR);
 			float resultG = weightMatrixG.ComputeValue(param->sigma_d, param->sigma_r, imageRegionG);
 			float resultB = weightMatrixB.ComputeValue(param->sigma_d, param->sigma_r, imageRegionB);
 
 			COLOR3 result = { byte(resultR),byte(resultG),byte(resultB) };
 			mFunction_SetPixel(param->pDest, x, y, result);
+		}
+		else
+		{
+			//边缘区域不滤波- -直接copy，比较懒
+			COLOR3 c = mFunction_GetPixel(param->pSrc, x, y);
+			mFunction_SetPixel(param->pDest, x, y, c);
 		}
 	}
 

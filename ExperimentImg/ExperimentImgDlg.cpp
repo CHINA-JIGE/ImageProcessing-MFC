@@ -283,7 +283,7 @@ void CExperimentImgDlg::OnBnClickedButtonProcess()
 		mFunction_MedianFilter();
 		break;
 	case 2://旋转与缩放
-		mFunction_Rotate(0.789f);
+		mFunction_Rotate();
 		break;
 	case 3://自动色阶
 		mFunction_AutoLevels();
@@ -551,24 +551,26 @@ void CExperimentImgDlg::mFunction_MedianFilter()
 }
 
 
-void CExperimentImgDlg::mFunction_Rotate(float angle)
+void CExperimentImgDlg::mFunction_Rotate()
 {
 	//从comboBox里面获取多线程的方案
 	CComboBox* cmb_parallelScheme = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
 	int parallelScheme = cmb_parallelScheme->GetCurSel();
-
 	mStartTime = CTime::GetTickCount();
+	float angle = float(mSlideControl_Alpha.GetPos()) / mSlideControl_Alpha.GetRangeMax() * 2.0f * 3.1415926f;
+	float scale = 0.5f;
+
 	switch (parallelScheme)
 	{
 	case 0://win多线程
 	{
-		ImageProcessor::Rotate_WIN(m_pImage1, m_pImageResult, mThreadNum,angle);
+		ImageProcessor::Rotate_WIN(m_pImage1, m_pImageResult, mThreadNum,angle,scale);
 		break;
 	}
 
 	case 1://openmp
 	{
-		ImageProcessor::Rotate_OpenMP(m_pImage1, m_pImageResult, mThreadNum,angle);
+		ImageProcessor::Rotate_OpenMP(m_pImage1, m_pImageResult, mThreadNum,angle, scale);
 		break;
 	}
 

@@ -47,7 +47,7 @@ private:
 
 	void		mFunction_AddNoise();
 
-	void		mFunction_Rotate(float angle);
+	void		mFunction_Rotate();
 
 	void		mFunction_AutoLevels();
 

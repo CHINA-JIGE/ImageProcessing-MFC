@@ -103,6 +103,7 @@ struct ThreadParam_Rotation
 	int startIndex;
 	int endIndex;
 	float radianAngle;
+	float scaleFactor;
 };
 
 struct ThreadParam_AutoLevels
@@ -151,8 +152,8 @@ public:
 	static UINT AddNoise_WIN(CImage* pImgSrc, CImage* pImgDest, int numThreads);
 	static UINT AddNoise_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads);
 
-	static UINT Rotate_WIN(CImage* pImgSrc, CImage* pImgDest, int numThreads, float radianAngle);
-	static UINT Rotate_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads, float radianAngle);
+	static UINT Rotate_WIN(CImage* pImgSrc, CImage* pImgDest, int numThreads, float radianAngle, float scaleFactor);
+	static UINT Rotate_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads, float radianAngle, float scaleFactor);
 
 	static UINT AutoLevels_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads);
 
