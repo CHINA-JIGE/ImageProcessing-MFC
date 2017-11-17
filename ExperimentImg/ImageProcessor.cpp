@@ -208,6 +208,40 @@ UINT ImageProcessor::Rotate_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numT
 	return 0;
 }
 
+UINT ImageProcessor::Rotate_CUDA(CImage * pImgSrc, CImage * pImgDest, float radianAngle, float scaleFactor)
+{	
+	//转到.cu文件看CUDA c++代码吧，这个函数在ImageProcessor.h里面
+	//extern "C"地声明了一波
+	int w = pImgSrc->GetWidth();
+	int h = pImgSrc->GetHeight();
+	int pitch = pImgSrc->GetPitch();
+	int positivePitch = abs(pitch);//pitch居然可以是负的，我服气了
+	const int bytesPerPixel = sizeof(COLOR3);
+
+	//CImage的像素数据储存太反人类了。。。
+	//pitch是负的，所以在GetBits()的正和负方向都有数据，服。。。
+	byte* pSrcData = (byte*)pImgSrc->GetBits();
+	byte* pDestData = (byte*)pImgDest->GetBits();
+	byte* pSrcDataLeastAddress = pSrcData-(h-1)*positivePitch;
+	byte* pDestDataLeastAddress = pDestData- (h - 1)*positivePitch;
+
+	cudaHost_RotateAndScale(
+		(const unsigned char*)pSrcDataLeastAddress,
+		(unsigned char*)pDestDataLeastAddress,
+		w,h,positivePitch,radianAngle,scaleFactor);
+
+	//因为不是cpu多线程，cuda的线程已经在.cu里面sync过了，所以
+	//就不post调用回调函数的那个message了
+	CTime endTime = CTime::GetTickCount();
+	CString timeStr;
+	timeStr.Format(_T("CUDA计算耗时:0 s"));
+	AfxMessageBox(timeStr);
+	//主动触发picturebox的onPaint事件
+	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
+
+	return 0;
+}
+
 UINT ImageProcessor::AutoLevels_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numThreads)
 {
 	ThreadParam_AutoLevels param;
@@ -215,6 +249,69 @@ UINT ImageProcessor::AutoLevels_OpenMP(CImage * pImgSrc, CImage * pImgDest, int 
 	param.pSrc = pImgSrc;
 	param.pDest = pImgDest;
 	ImageProcessor::mFunction_AutoLevels(&param);
+	return 0;
+}
+
+UINT ImageProcessor::AutoLevels_CUDA(CImage * pImgSrc, CImage * pImgDest)
+{
+	//转到.cu文件看CUDA c++代码吧，这个函数在ImageProcessor.h里面
+	//extern "C"地声明了一波
+	int w = pImgSrc->GetWidth();
+	int h = pImgSrc->GetHeight();
+	int pitch = pImgSrc->GetPitch();
+	int positivePitch = abs(pitch);//pitch居然可以是负的，我服气了
+	const int bytesPerPixel = sizeof(COLOR3);
+
+	//统计像素值时低切与高切的threshold
+	const byte lowCut = 20;
+	const byte highCut = 230;
+
+	//统计直方图，遍历全图这种东西就不要
+	byte maxR = 0, maxG = 0, maxB = 0;
+	byte minR = 255, minG = 255, minB = 255;
+#pragma omp parallel for num_threads(mThreadNum)
+	for (int j = 0; j < h; ++j)
+	{
+		for (int i = 0; i < w; ++i)
+		{
+			COLOR3 c = mFunction_GetPixel(pImgSrc, i, j);
+			if (c.r > maxR)maxR = c.r;
+			if (c.g > maxG)maxG = c.g;
+			if (c.b > maxB)maxB = c.b;
+			if (c.r < minR)minR = c.r;
+			if (c.g < minG)minG = c.g;
+			if (c.b < minB)minB = c.b;
+		}
+	}
+	if (maxR > highCut)maxR = highCut;
+	if (maxG > highCut)maxG = highCut;
+	if (maxB > highCut)maxB = highCut;
+	if (minR < lowCut)minR = lowCut;
+	if (minG < lowCut)minG = lowCut;
+	if (minB < lowCut)minB = lowCut;
+
+	//CImage的像素数据储存太反人类了。。。
+	//pitch是负的，所以在GetBits()的正和负方向都有数据，服。。。
+	byte* pSrcData = (byte*)pImgSrc->GetBits();
+	byte* pDestData = (byte*)pImgDest->GetBits();
+	byte* pSrcDataLeastAddress = pSrcData - (h - 1)*positivePitch;
+	byte* pDestDataLeastAddress = pDestData - (h - 1)*positivePitch;
+
+	cudaHost_AutoLevels(
+		(const unsigned char*)pSrcDataLeastAddress,
+		(unsigned char*)pDestDataLeastAddress,
+		w, h, positivePitch, minR, maxR, minG, maxG, minB, maxB);
+
+
+	//因为不是cpu多线程，cuda的线程已经在.cu里面sync过了，所以
+	//就不post调用回调函数的那个message了
+	CTime endTime = CTime::GetTickCount();
+	CString timeStr;
+	timeStr.Format(_T("CUDA计算耗时:0 s"));
+	AfxMessageBox(timeStr);
+	//主动触发picturebox的onPaint事件
+	::PostMessage(AfxGetMainWnd()->GetSafeHwnd(), WM_PAINT, 1, NULL);
+
 	return 0;
 }
 
@@ -276,7 +373,7 @@ UINT ImageProcessor::ImageBlending_OpenMP(CImage * pImgSrc1, CImage * pImgSrc2, 
 	return 0;
 }
 
-UINT ImageProcessor::BilateralFilter_BOOST(CImage * pImgSrc, CImage * pImgDest, int numThreads)
+UINT ImageProcessor::BilateralFilter_OpenMP(CImage * pImgSrc, CImage * pImgDest, int numThreads)
 {
 	int subLength = pImgSrc->GetWidth() * pImgSrc->GetHeight() / numThreads;
 	ThreadParam_BilateralFilter* pParamArray = new ThreadParam_BilateralFilter[numThreads];

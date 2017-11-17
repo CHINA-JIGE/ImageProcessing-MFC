@@ -7,6 +7,7 @@
 #include "ImageProcessor.h"
 #include "afxcmn.h"
 
+#pragma warning (disable : 4819)
 
 // CExperimentImgDlg ¶Ô»°¿ò
 class CExperimentImgDlg : public CDialogEx

@@ -100,7 +100,7 @@ BOOL CExperimentImgDlg::OnInitDialog()
 	CComboBox * cmb_thread = ((CComboBox*)GetDlgItem(IDC_COMBO_THREAD));
 	cmb_thread->InsertString(0, _T("WIN多线程"));
 	cmb_thread->InsertString(1, _T("OpenMP"));
-	cmb_thread->InsertString(2, _T("Boost多线程"));
+	cmb_thread->InsertString(2, _T("CUDA"));
 	cmb_thread->SetCurSel(0);
 
 	mSlideControl_ThreadNum.SetRange(1, cMaxThreadNum, TRUE);
@@ -200,8 +200,8 @@ void CExperimentImgDlg::RenderToPictureBox(CStatic * pPicBox, CImage * pImage)
 			float xScale = (float)originalRect.Width() / (float)width;
 			float yScale = (float)originalRect.Height() / (float)height;
 			float ScaleIndex = (xScale <= yScale ? xScale : yScale);
-			int scaleWidth = width*ScaleIndex;
-			int scaleHeight = height*ScaleIndex;
+			int scaleWidth = int(width*ScaleIndex);
+			int scaleHeight = int(height*ScaleIndex);
 			scaledRect = CRect(originalRect.TopLeft(), CSize(scaleWidth,scaleHeight));
 			pImage->StretchBlt(pDC->m_hDC, scaledRect, SRCCOPY);
 		}
@@ -515,9 +515,9 @@ void CExperimentImgDlg::mFunction_AddNoise()
 		break;
 	}
 
-	case 2://boost
+	case 2://CUDA
 	{
-		AfxMessageBox(_T("【椒盐噪声】算法未实现基于boost库的并行加速！"));
+		AfxMessageBox(_T("【椒盐噪声】算法未实现基于CUDA的并行加速！"));
 		break;
 	}
 	}
@@ -544,12 +544,11 @@ void CExperimentImgDlg::mFunction_MedianFilter()
 		break;
 	}
 
-	case 2://boost
-		AfxMessageBox(_T("【中值滤波】算法未实现基于boost库的并行加速！"));
+	case 2://CUDA
+		AfxMessageBox(_T("【中值滤波】算法未实现基于CUDA的并行加速！"));
 		break;
 	}
 }
-
 
 void CExperimentImgDlg::mFunction_Rotate()
 {
@@ -574,8 +573,8 @@ void CExperimentImgDlg::mFunction_Rotate()
 		break;
 	}
 
-	case 2://boost
-		AfxMessageBox(_T("【旋转与三阶采样】算法未实现基于boost库的并行加速！"));
+	case 2://CUDA
+		ImageProcessor::Rotate_CUDA(m_pImage1, m_pImageResult, angle, scale);
 		break;
 	}
 }
@@ -604,8 +603,8 @@ void CExperimentImgDlg::mFunction_AutoLevels()
 		break;
 	}
 
-	case 2://boost
-		AfxMessageBox(_T("【自动色阶】算法未实现基于boost库的并行加速！"));
+	case 2://CUDA
+		ImageProcessor::AutoLevels_CUDA(m_pImage1, m_pImageResult);
 		break;
 	}
 }
@@ -634,8 +633,8 @@ void CExperimentImgDlg::mFunction_AutoWhiteBalance()
 		break;
 	}
 
-	case 2://boost
-		AfxMessageBox(_T("【自动白平衡】算法未实现基于boost库的并行加速！"));
+	case 2://CUDA
+		AfxMessageBox(_T("【自动白平衡】算法未实现基于CUDA的并行加速！"));
 		break;
 	}
 }
@@ -663,8 +662,8 @@ void CExperimentImgDlg::mFunction_ImageBlending()
 		break;
 	}
 
-	case 2://boost
-		AfxMessageBox(_T("【图像融合】算法未实现基于boost库的并行加速！"));
+	case 2://CUDA
+		AfxMessageBox(_T("【图像融合】算法未实现基于CUDA的并行加速！"));
 		break;
 	}
 }
@@ -686,11 +685,12 @@ void CExperimentImgDlg::mFunction_BilateralFilter()
 
 	case 1://openmp
 	{
-		AfxMessageBox(_T("【双边滤波】算法未实现基于OpenMP并行加速！"));		break;
+		ImageProcessor::BilateralFilter_OpenMP(m_pImage1, m_pImageResult, mThreadNum);
+		break;
 	}
 
-	case 2://boost
-		ImageProcessor::BilateralFilter_BOOST(m_pImage1, m_pImageResult, mThreadNum);
+	case 2://CUDA
+		AfxMessageBox(_T("【双边滤波】算法未实现基于CUDA的并行加速！"));
 		break;
 	}
 }

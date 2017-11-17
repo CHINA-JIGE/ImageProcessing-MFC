@@ -2,7 +2,11 @@
 #pragma once
 
 static const UINT cMaxThreadNum = 8;
+
 static const UINT cMedianFilterMaxSpan = 15;
+
+static bool GetValue(int p[], int size, int &value);
+
 
 struct COLOR3
 {
@@ -138,7 +142,10 @@ struct ThreadParam_BilateralFilter
 	float sigma_r;//双边滤波的一个自定参数，一般10~300
 };
 
-static bool GetValue(int p[], int size, int &value);
+//cuda function declaration
+extern "C" int cudaHost_RotateAndScale(const unsigned char* srcImage, unsigned char* destImage, int width, int height, int pitch, float angle, float scaleFactor);
+extern "C" int cudaHost_AutoLevels(const unsigned char* srcImage, unsigned char* destImage,
+	int width, int height, int pitch,byte minR, byte maxR,byte minG, byte maxG,byte minB, byte maxB);
 
 class ImageProcessor
 {
@@ -148,14 +155,15 @@ public:
 	static UINT MedianFilter_WIN(CImage* pImgSrc,CImage* pImgDest,int numThreads);
 	static UINT MedianFilter_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads);
 
-
 	static UINT AddNoise_WIN(CImage* pImgSrc, CImage* pImgDest, int numThreads);
 	static UINT AddNoise_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads);
 
 	static UINT Rotate_WIN(CImage* pImgSrc, CImage* pImgDest, int numThreads, float radianAngle, float scaleFactor);
 	static UINT Rotate_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads, float radianAngle, float scaleFactor);
+	static UINT Rotate_CUDA(CImage* pImgSrc, CImage* pImgDest, float radianAngle, float scaleFactor);
 
 	static UINT AutoLevels_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads);
+	static UINT AutoLevels_CUDA(CImage* pImgSrc, CImage* pImgDest);
 
 	static UINT AutoWhiteBalance_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads);
 
@@ -164,7 +172,7 @@ public:
 	static UINT ImageBlending_OpenMP(CImage* pImgSrc1, CImage* pImgSrc2, CImage* pImgDest, int numThreads, float alpha);
 
 	//双边滤波
-	static UINT BilateralFilter_BOOST(CImage* pImgSrc, CImage* pImgDest, int numThreads);
+	static UINT BilateralFilter_OpenMP(CImage* pImgSrc, CImage* pImgDest, int numThreads);
 
 private:
 	//template <int bytePerPixel>
@@ -186,4 +194,5 @@ private:
 	static UINT mFunction_ImageBlending(LPVOID pThreadParam);
 
 	static UINT mFunction_BilateralFilter(LPVOID pThreadParam);
+
 };
